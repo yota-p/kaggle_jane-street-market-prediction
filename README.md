@@ -1,7 +1,4 @@
-# Jane Street Market Prediction
-==============================
-
-https://www.kaggle.com/c/jane-street-market-prediction/overview
+# [Jane Street Market Prediction](https://www.kaggle.com/c/jane-street-market-prediction/overview)
 
 Best score: Public LB XXXXXX (TODO: Coming soon...)
 ------------
