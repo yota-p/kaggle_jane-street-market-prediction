@@ -1,5 +1,5 @@
 # local package
-#-e .
+#-e . # TODO: this doesn't work
 
 # external requirements
 click
