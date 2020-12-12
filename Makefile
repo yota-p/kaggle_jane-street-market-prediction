@@ -2,7 +2,8 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PYTHON_INTERPRETER = python
+PYTHON_INTERPRETER = python3
+GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction/data
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -15,10 +16,6 @@ clean:
 	find . -type f -name "*~" -delete
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
-
-## Delete cache, data/*/*
-eliminate: clean
-	rm -vi data/*/*
 
 ## Run specified version: production
 run:
@@ -38,7 +35,7 @@ jupyter:
 
 ## Test
 test:
-	$(PYTHON_INTERPRETER) setup.py test
+	pytest tests/test*.py
 
 ## Test python environment is setup correctly
 test_environment:
@@ -51,18 +48,26 @@ lint:
 ## Upload Data to S3
 sync_data_to_s3:
 ifeq (default,$(PROFILE))
-	aws s3 sync data/ s3://$(BUCKET)/data/
+	aws s3 sync data/ s3://$(S3_BUCKET)/data/
 else
-	aws s3 sync data/ s3://$(BUCKET)/data/ --profile $(PROFILE)
+	aws s3 sync data/ s3://$(S3_BUCKET)/data/ --profile $(PROFILE)
 endif
 
 ## Download Data from S3
 sync_data_from_s3:
-ifeq (default,$(PROFILE))
+ifeq (default,$(S3_PROFILE))
 	aws s3 sync s3://$(BUCKET)/data/ data/
 else
-	aws s3 sync s3://$(BUCKET)/data/ data/ --profile $(PROFILE)
+	aws s3 sync s3://$(S3_BUCKET)/data/ data/ --profile $(PROFILE)
 endif
+
+## Upload Data to GCS
+sync_data_to_gcs:
+	gsutil rsync -d -r data/ gs://$(GCS_BUCKET)/data/
+
+## Download Data from GCS
+sync_data_from_gcs:
+	gsutil rsync -d -r gs://$(GCS_BUCKET)/data/ data/
 
 #################################################################################
 # Self Documenting Commands                                                     #

@@ -3,9 +3,6 @@
 echo 'Starting Jupyter server'
 nohup jupyter notebook --port 8080 --ip=0.0.0.0 --allow-root >> jupyter.log 2>&1 &
 
-echo 'Hit below at local to establish port forwarding connection to server:'
-echo '    $ gcloud compute ssh HOST -- -N -L 8080:localhost:8080'
-
 # Wait $WAIT seconds until the server starts
 # Command below will show a progress bar
 WAIT=15
@@ -38,4 +35,4 @@ done
 echo -e "Starting Jupyter server. Wait $WAIT s...  [$BAR] $PERCENTAGE %\r"
 
 echo 'Started. URL for Jupyter is:'
-tail -n 1 notebook/jupyter.log | awk '{print substr($0, index($0, "http"))}' | xargs -n1 echo '    '
+tail -n 1 jupyter.log | awk '{print substr($0, index($0, "http"))}'
