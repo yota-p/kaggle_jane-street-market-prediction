@@ -2,7 +2,7 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PYTHON_INTERPRETER = python3
+PYTHON_INTERPRETER = python
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -37,8 +37,8 @@ jupyter:
 	./startup-jupyter.sh
 
 ## Test
-test: all
-	pytest
+test:
+	$(PYTHON_INTERPRETER) setup.py test
 
 ## Test python environment is setup correctly
 test_environment:
