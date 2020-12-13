@@ -1,4 +1,4 @@
-name: CI
+name: lint
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  pytest:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +33,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - run: make install
+      - run: pip install flake8==3.7.9
 
       - uses: actions/cache@v1
         with:
@@ -43,5 +43,3 @@ jobs:
             ${{ runner.os }}-pip-
 
       - run: make lint
-
-      - run: make test

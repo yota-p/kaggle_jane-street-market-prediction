@@ -48,7 +48,7 @@ install:
 
 ## Lint using flake8
 lint:
-	flake8 src
+	flake8 .
 
 ## Upload Data to S3
 sync_data_to_s3:
