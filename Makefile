@@ -35,7 +35,7 @@ jupyter:
 
 ## Test
 test:
-	pytest tests/test*.py
+	python setup.py test
 
 ## Test python environment is setup correctly
 test_environment:
