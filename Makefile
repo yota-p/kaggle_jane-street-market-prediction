@@ -41,6 +41,10 @@ test:
 test_environment:
 	$(PYTHON_INTERPRETER) test_environment.py
 
+## Install dependencies
+install:
+	pip install -r requirements.txt
+
 ## Lint using flake8
 lint:
 	flake8 src
