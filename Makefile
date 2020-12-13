@@ -3,6 +3,7 @@
 #################################################################################
 
 PYTHON_INTERPRETER = python3
+#S3_BUCKET = 
 GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction/data
 
 #################################################################################
@@ -35,15 +36,19 @@ jupyter:
 
 ## Test
 test:
-	pytest tests/test*.py
+	python setup.py test
 
 ## Test python environment is setup correctly
 test_environment:
 	$(PYTHON_INTERPRETER) test_environment.py
 
+## Install dependencies
+install:
+	pip install -r requirements.txt
+
 ## Lint using flake8
 lint:
-	flake8 src
+	flake8 .
 
 ## Upload Data to S3
 sync_data_to_s3:
