@@ -5,9 +5,9 @@ import numpy as np
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
-NB = '0002'
-IN_DIR = '../../data/raw'
-OUT_DIR = f'../../data/processed/{NB}'
+EXNO = '002'
+IN_DIR = '../data/001'
+OUT_DIR = f'../data/{EXNO}'
 assert(os.path.exists(IN_DIR))
 assert(os.path.exists(OUT_DIR))
 
@@ -61,20 +61,22 @@ def main():
     - train_dtypes.csv
     - train.pkl
     '''
-    # load data
-    df = pd.read_csv(f'{IN_DIR}/train.csv')
-    df.info()  # Size of the dataframe is about 2.5 GB
+    if not os.path.exists(f'{IN_DIR}/train.gz'):
+        df = pd.read_csv(f'{IN_DIR}/train.gz', compression='gzip')
+        df.info()  # Size of the dataframe is about 2.5 GB
+        dfnew = reduce_mem_usage(df)
+        dfnew.memory_usage(deep=True)
+        df.info()  # The dataframe size has decreased to 630MB (75% less).
 
-    # reduce size
-    dfnew = reduce_mem_usage(df)
-    dfnew.memory_usage(deep=True)
+        # Save reduced data
+        print(dfnew.dtypes)
+        dfnew.dtypes.to_csv(f'{OUT_DIR}/train_dtypes.csv', header=False)
+        dfnew.to_pickle(f'{OUT_DIR}/train.pkl')
+        del df, dfnew
 
-    df.info()  # The dataframe size has decreased to 630MB (75% less).
-
-    # Save reduced data
-    print(dfnew.dtypes)
-    dfnew.dtypes.to_csv(f'{OUT_DIR}/train_dtypes.csv', header=False)
-    dfnew.to_pickle(f'{OUT_DIR}/train.pkl')
+    for file in ['example_sample_submission', 'example_test', 'features']:
+        df = pd.read_csv(f'{IN_DIR}/{file}.gz', compression='gzip')
+        df.to_pickle(f'{OUT_DIR}/{file}.pkl')
 
 
 if __name__ == '__main__':
