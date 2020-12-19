@@ -1,4 +1,5 @@
 # Machine requirement: Memory size > 16GB to execute this script
+import os
 import pandas as pd
 import numpy as np
 pd.set_option('display.max_rows', 1000)
@@ -7,6 +8,8 @@ pd.set_option('display.max_columns', 1000)
 NB = '0002'
 IN_DIR = '../../data/raw'
 OUT_DIR = f'../../data/processed/{NB}'
+assert(os.path.exists(IN_DIR))
+assert(os.path.exists(OUT_DIR))
 
 
 def reduce_mem_usage(df):
