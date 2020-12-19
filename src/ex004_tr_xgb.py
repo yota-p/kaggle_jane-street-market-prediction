@@ -16,7 +16,7 @@ env = janestreet.make_env()  # initialize the environment
 iter_test = env.iter_test()  # an iterator which loops over the test set
 
 
-def main(EXNO, IN_DIR, OUT_DIR, XGB_PARAM, need_pred):
+def main(EXNO, IN_DIR, OUT_DIR, XGB_PARAM, mode_pred):
     train = pd.read_pickle(f'{IN_DIR}/train.pkl')
     print(f'Input train shape: {train.shape}')
 
@@ -31,17 +31,14 @@ def main(EXNO, IN_DIR, OUT_DIR, XGB_PARAM, need_pred):
     print(f'y_train.shape: {y_train.shape}')
     del train
 
-    # Training
-    # The training part taked from here https://www.kaggle.com/xhlulu/ieee-fraud-xgboost-with-gpu-fit-in-40s
-    model = xgb.XGBClassifier(**XGB_PARAM)
-
-    print('Start training')
-    model.fit(X_train, y_train)
-    print('End training')
-    pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
-
-    # Predict
-    if need_pred:
+    if not mode_pred:
+        model = xgb.XGBClassifier(**XGB_PARAM)
+        print('Start training')
+        model.fit(X_train, y_train)
+        print('End training')
+        pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
+    else:
+        model = pickle.load(open(f'{OUT_DIR}/model.pkl', 'rb'))
         print('Start predicting')
         for (test_df, sample_prediction_df) in iter_test:
             X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
