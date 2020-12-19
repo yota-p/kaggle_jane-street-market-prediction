@@ -4,7 +4,7 @@
 
 PYTHON_INTERPRETER = python3
 #S3_BUCKET = 
-GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction/data
+GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction
 
 #################################################################################
 # COMMANDS                                                                      #
