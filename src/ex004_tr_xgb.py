@@ -1,16 +1,16 @@
 import os
 import sys
-import warnings
 from argparse import ArgumentParser
 import pandas as pd
 import xgboost as xgb
 import pickle
 import shutil
+import warnings
+warnings.filterwarnings("ignore")
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../data/001'))
 import janestreet
 
-warnings.filterwarnings("ignore")
 
 env = janestreet.make_env()  # initialize the environment
 iter_test = env.iter_test()  # an iterator which loops over the test set
