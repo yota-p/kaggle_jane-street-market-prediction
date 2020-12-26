@@ -4,7 +4,7 @@
 
 PYTHON_INTERPRETER = python3
 #S3_BUCKET = 
-GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction/data
+GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -51,7 +51,7 @@ lint:
 	flake8 .
 
 ## Upload Data to S3
-sync_data_to_s3:
+to_s3:
 ifeq (default,$(PROFILE))
 	aws s3 sync data/ s3://$(S3_BUCKET)/data/
 else
@@ -59,7 +59,7 @@ else
 endif
 
 ## Download Data from S3
-sync_data_from_s3:
+from_s3:
 ifeq (default,$(S3_PROFILE))
 	aws s3 sync s3://$(BUCKET)/data/ data/
 else
@@ -67,11 +67,11 @@ else
 endif
 
 ## Upload Data to GCS
-sync_data_to_gcs:
+to_gcs:
 	gsutil rsync -d -r data/ gs://$(GCS_BUCKET)/data/
 
 ## Download Data from GCS
-sync_data_from_gcs:
+from_gcs:
 	gsutil rsync -d -r gs://$(GCS_BUCKET)/data/ data/
 
 #################################################################################

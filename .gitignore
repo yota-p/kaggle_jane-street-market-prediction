@@ -124,7 +124,7 @@ venv.bak/
 *.swo
 
 # Emacs cache
-*.~
+*~
 
 # MacOS Specific
 .DS_Store
