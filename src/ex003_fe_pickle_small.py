@@ -1,10 +1,11 @@
-import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import shutil
+from util.get_environment import get_environment
 
 
-def main(EXNO, IN_DIR, OUT_DIR):
+def main():
     '''
     Function:
     - Extract from train where mod(date, 100)==0. (Approx. 5% of full dataset)
@@ -21,6 +22,11 @@ def main(EXNO, IN_DIR, OUT_DIR):
     - example_test.pkl
     - features.pkl
     '''
+    EXNO = '003'
+    ENV, DATA_DIR = get_environment()
+    IN_DIR = f'{DATA_DIR}/002'
+    OUT_DIR = f'{DATA_DIR}/{EXNO}'
+    Path(OUT_DIR).mkdir(exist_ok=True)
 
     df = pd.read_pickle(f'{IN_DIR}/train.pkl')
     print('# Of unique dates before extraction:')
@@ -37,9 +43,4 @@ def main(EXNO, IN_DIR, OUT_DIR):
 
 
 if __name__ == '__main__':
-    EXNO = '003'
-    IN_DIR = '../data/002'
-    OUT_DIR = f'../data/{EXNO}'
-    assert(os.path.exists(IN_DIR))
-    assert(os.path.exists(OUT_DIR))
-    main(EXNO, IN_DIR, OUT_DIR)
+    main()
