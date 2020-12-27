@@ -1,12 +1,14 @@
 # Machine requirement: Memory size > 16GB to execute this script
 import os
+from pathlib import Path
 import pandas as pd
 from util.reduce_mem_usage import reduce_mem_usage
+from util.get_environment import get_datadir
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
 
-def main(EXNO, IN_DIR, OUT_DIR):
+def main():
     '''
     Function:
     - Reduce size of train.csv from 2.5GB to 600MB (On memory)
@@ -18,15 +20,21 @@ def main(EXNO, IN_DIR, OUT_DIR):
     - features.pkl
     - train_dtypes.csv
     '''
-    assert(not os.path.exists(f'{OUT_DIR}/train.pkl'))
+    EXNO = '002'
+    DATA_DIR = get_datadir()
+    IN_DIR = f'{DATA_DIR}/001'
+    OUT_DIR = f'{DATA_DIR}/{EXNO}'
+    Path(OUT_DIR).mkdir(exist_ok=True)
+
+    if os.path.exists(f'{OUT_DIR}/train.pkl'):
+        print(f'Output exists. Skip processing: {OUT_DIR}/train.pkl')
+        return
 
     df = pd.read_csv(f'{IN_DIR}/train.csv')
     print(df.info())  # Size of the dataframe is about 2.5 GB
     dfnew = reduce_mem_usage(df)
     dfnew.memory_usage(deep=True)
     print(df.info())  # The dataframe size has decreased to 630MB (75% less).
-
-    assert(len(df) == 2390491)
 
     # Save reduced data
     print(dfnew.dtypes)
@@ -40,9 +48,4 @@ def main(EXNO, IN_DIR, OUT_DIR):
 
 
 if __name__ == '__main__':
-    EXNO = '002'
-    IN_DIR = '../data/001'
-    OUT_DIR = f'../data/{EXNO}'
-    assert(os.path.exists(IN_DIR))
-    assert(os.path.exists(OUT_DIR))
-    main(EXNO, IN_DIR, OUT_DIR)
+    main()
