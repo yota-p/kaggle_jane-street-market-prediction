@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import pandas as pd
 from util.reduce_mem_usage import reduce_mem_usage
-from util.get_environment import get_environment
+from util.get_environment import get_datadir
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
@@ -21,20 +21,20 @@ def main():
     - train_dtypes.csv
     '''
     EXNO = '002'
-    ENV, DATA_DIR = get_environment()
+    DATA_DIR = get_datadir()
     IN_DIR = f'{DATA_DIR}/001'
     OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
 
-    assert(not os.path.exists(f'{OUT_DIR}/train.pkl'))
+    if os.path.exists(f'{OUT_DIR}/train.pkl'):
+        print(f'Output exists. Skip processing: {OUT_DIR}/train.pkl')
+        return
 
     df = pd.read_csv(f'{IN_DIR}/train.csv')
     print(df.info())  # Size of the dataframe is about 2.5 GB
     dfnew = reduce_mem_usage(df)
     dfnew.memory_usage(deep=True)
     print(df.info())  # The dataframe size has decreased to 630MB (75% less).
-
-    assert(len(df) == 2390491)
 
     # Save reduced data
     print(dfnew.dtypes)

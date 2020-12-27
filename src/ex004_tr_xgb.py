@@ -7,7 +7,7 @@ import xgboost as xgb
 import pickle
 import shutil
 import warnings
-from util.get_environment import get_environment
+from util.get_environment import get_datadir, get_exec_env, is_jupyter
 warnings.filterwarnings("ignore")
 
 
@@ -24,9 +24,27 @@ def parse_args():
     argparser.add_argument('--nocache',
                            default=False,
                            action='store_true',
-                           help='Do not use cache for run')
+                           help='Ignore cache')
     args = argparser.parse_args()
     return args
+
+
+def get_option():
+    option = {
+        'small': None,
+        'predict': None,
+        'nocache': None
+    }
+    if is_jupyter():
+        option['small'] = False
+        option['predict'] = True
+        option['nocache'] = False
+    else:
+        args = parse_args()
+        option['small'] = args.small
+        option['predict'] = args.predict
+        option['nocache'] = args.nocache
+    return option
 
 
 def xgb_param(debug):
@@ -58,9 +76,9 @@ def xgb_param(debug):
 def main():
     # Setup
     EXNO = '004'
-    args = parse_args()
-    ENV, DATA_DIR = get_environment()
-    if args.small:
+    option = get_option()
+    DATA_DIR = get_datadir()
+    if option['small']:
         print('Using small dataset & model')
         IN_DIR = f'{DATA_DIR}/003'  # small dataset
         XGB_PARAM = xgb_param(debug=True)
@@ -87,7 +105,7 @@ def main():
     del train
 
     # Train
-    if os.path.exists(f'{OUT_DIR}/model.pkl') and not args.nocache:
+    if os.path.exists(f'{OUT_DIR}/model.pkl') and not option['nocache']:
         print('Using existing model')
         model = pickle.load(open(f'{OUT_DIR}/model.pkl', 'rb'))
     else:
@@ -98,8 +116,8 @@ def main():
         pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
 
     # Predict
-    if args.predict:
-        if ENV not in ['kaggle-interactive', 'kaggle-batch']:
+    if option['predict']:
+        if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
             sys.path.append(os.path.join(os.path.dirname(__file__), f'{DATA_DIR}/001'))
         import janestreet
         env = janestreet.make_env()  # initialize the environment
