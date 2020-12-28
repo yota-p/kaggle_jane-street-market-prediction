@@ -5,6 +5,9 @@ from src.util.reduce_mem_usage import reduce_mem_usage
 '''
 Ref:
 - https://qiita.com/siruku6/items/27dd9fb84aa84186eda5
+Note:
+- Mixing None, np.nan, 0.0 in integer columns will result in float.
+- Float dtypes can't contain much digits (look below).
 '''
 
 
