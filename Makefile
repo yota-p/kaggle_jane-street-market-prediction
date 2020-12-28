@@ -3,7 +3,7 @@
 #################################################################################
 
 PYTHON_INTERPRETER = python3
-#S3_BUCKET = 
+#S3_BUCKET =
 GCS_BUCKET = local-abbey-244223/kaggle_jane-street-market-prediction
 
 #################################################################################
@@ -37,6 +37,10 @@ jupyter:
 ## Test
 test:
 	python setup.py test
+
+## Create base64 encoded script from src/
+encode:
+	python encode.py
 
 ## Test python environment is setup correctly
 test_environment:

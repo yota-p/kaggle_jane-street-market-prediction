@@ -50,7 +50,7 @@ def get_option():
 def xgb_param(debug):
     if debug:
         XGB_PARAM = {
-            'n_estimators': 500,
+            'n_estimators': 20,
             'max_depth': 11,
             'learning_rate': 0.05,
             'subsample': 0.9,
@@ -61,14 +61,14 @@ def xgb_param(debug):
         }
     else:
         XGB_PARAM = {
-            'n_estimators': 20,
+            'n_estimators': 500,
             'max_depth': 11,
             'learning_rate': 0.05,
             'subsample': 0.9,
             'colsample_bytree': 0.7,
             'missing': -999,
-            'random_state': 2020
-            # tree_method='gpu_hist'  # THE MAGICAL PARAMETER
+            'random_state': 2020,
+            'tree_method': 'gpu_hist'  # THE MAGICAL PARAMETER
         }
     return XGB_PARAM
 
