@@ -147,4 +147,4 @@ src.egg-info/
 .coverage
 .pytest_cache/n
 
-built/
+script/script.py
