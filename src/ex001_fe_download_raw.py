@@ -13,7 +13,7 @@ def main():
     Path(OUT_DIR).mkdir(exist_ok=True)
 
     if ENV in ['kaggle-Interactive', 'kaggle-Batch']:
-        for f in glob.glob('/kaggle/input/jane-street-market-prediction/*.csv'):
+        for f in glob.glob(f'{DATA_DIR}/../../input/jane-street-market-prediction/*.csv'):
             shutil.copy2(f, OUT_DIR)
     else:
         cmd = [f'kaggle competitions download -c jane-street-market-prediction -p {OUT_DIR}',
