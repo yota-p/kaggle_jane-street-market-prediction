@@ -7,7 +7,7 @@ import xgboost as xgb
 import pickle
 import shutil
 import warnings
-from util.get_environment import get_datadir, get_exec_env, is_jupyter
+from src.util.get_environment import get_datadir, get_exec_env, is_jupyter
 warnings.filterwarnings("ignore")
 
 

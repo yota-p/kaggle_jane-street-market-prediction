@@ -2,8 +2,8 @@
 import os
 from pathlib import Path
 import pandas as pd
-from util.reduce_mem_usage import reduce_mem_usage
-from util.get_environment import get_datadir
+from src.util.reduce_mem_usage import reduce_mem_usage
+from src.util.get_environment import get_datadir
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 

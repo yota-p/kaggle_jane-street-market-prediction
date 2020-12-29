@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import glob
-from util.get_environment import get_datadir, get_exec_env
+from src.util.get_environment import get_datadir, get_exec_env
 
 
 def main():

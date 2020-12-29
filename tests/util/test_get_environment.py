@@ -1,3 +1,4 @@
+import pytest
 from src.util.get_environment import get_datadir
 
 
@@ -16,4 +17,9 @@ class TestGetDataDir:
 
     def test_local(self, mocker):
         mocker.patch('src.util.get_environment.get_exec_env', return_value='local')
-        assert(get_datadir() == '../data')
+        assert(get_datadir() == './data')
+
+    def test_other(self, mocker):
+        mocker.patch('src.util.get_environment.get_exec_env', return_value='')
+        with pytest.raises(ValueError):
+            get_datadir()
