@@ -13,6 +13,7 @@ Note:
 
 class TestReduceMemoryUsage:
     def test_int8(self):
+        # (-128, 127)
         int8min = np.iinfo(np.int8).min
         int8max = np.iinfo(np.int8).max
         df = pd.DataFrame({'col1': [int8min, int8max-1],
@@ -24,6 +25,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'int16')
 
     def test_int16(self):
+        # (-32768, 32767)
         int16min = np.iinfo(np.int16).min
         int16max = np.iinfo(np.int16).max
         df = pd.DataFrame({'col1': [int16min, int16max-1],
@@ -35,6 +37,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'int32')
 
     def test_int32(self):
+        # (-2147483648, 2147483647)
         int32min = np.iinfo(np.int32).min
         int32max = np.iinfo(np.int32).max
         df = pd.DataFrame({'col1': [int32min, int32max-1],
@@ -46,6 +49,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'int64')
 
     def test_int64(self):
+        # (-9223372036854775808, 9223372036854775807)
         int64min = np.iinfo(np.int64).min
         int64max = np.iinfo(np.int64).max
         df = pd.DataFrame({'col1': [int64min, int64max-1],
@@ -57,6 +61,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'int64')
 
     def test_float16(self):
+        # (-65500.0, 65500.0)
         # float16 keeps 3 digits
         float16min = np.finfo(np.float16).min
         float16max = np.finfo(np.float16).max
@@ -69,6 +74,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'float32')
 
     def test_float32(self):
+        # (-3.4028235e+38, 3.4028235e+38)
         # float32 keeps 6 digits
         float32min = np.finfo(np.float32).min
         float32max = np.finfo(np.float32).max
@@ -81,6 +87,7 @@ class TestReduceMemoryUsage:
         assert(df_out.col3.dtype == 'float64')
 
     def test_float64(self):
+        # (-1.7976931348623157e+308, 1.7976931348623157e+308)
         # float64 keeps 15 digits
         float64min = np.finfo(np.float64).min
         float64max = np.finfo(np.float64).max
