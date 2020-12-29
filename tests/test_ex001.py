@@ -4,11 +4,12 @@ import hashlib
 from src import ex001_fe_download_raw
 
 
-KAGGLE_ENV = ['kaggle-Interactive', 'kaggle-Batch']
-
-
-@pytest.mark.parametrize('ENV', KAGGLE_ENV)
 class TestEx001:
+    '''
+    Note:
+    No tests implemented for download & unzip
+    '''
+    @pytest.mark.parametrize('ENV', ['kaggle-Interactive', 'kaggle-Batch'])
     def test_kaggle(self, mocker, tmpdir, ENV):
         EXNO = '001'
         DATA_DIR = str(tmpdir) + '/working/data'  # This is equal to /kaggle/working
@@ -44,3 +45,17 @@ class TestEx001:
         # non-csv won't be copied
         with pytest.raises(FileNotFoundError):
             open(f'{OUT_DIR}/{dummyfile}', 'rb')
+
+    def test_abnormal(self, mocker, tmpdir):
+        EXNO = '001'
+        DATA_DIR = str(tmpdir)
+        OUT_DIR = f'{DATA_DIR}/{EXNO}'
+        Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
+
+        ENV = 'fizz'
+
+        mocker.patch('src.ex001_fe_download_raw.get_datadir', return_value=DATA_DIR)
+        mocker.patch('src.ex001_fe_download_raw.get_exec_env', return_value=ENV)
+
+        with pytest.raises(ValueError):
+            ex001_fe_download_raw.main()
