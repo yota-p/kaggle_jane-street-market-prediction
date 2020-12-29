@@ -12,14 +12,11 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    container:
+      image: gcr.io/kaggle-images/python@sha256:993897c5431c85530f48a9fe6546d01decc42d91ab05f4d9eb31ab0da835fe90
 
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
 
       - name: Get pip cache dir
         id: pip-cache
