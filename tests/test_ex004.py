@@ -9,7 +9,7 @@ class TestEx004:
         option = {
             'small': False,
             'predict': False,
-            'nocache': True, 
+            'nocache': True,
             'gpu': False
         }
         DATA_DIR = str(tmpdir)
