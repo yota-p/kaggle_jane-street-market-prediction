@@ -25,51 +25,46 @@ def parse_args():
                            default=False,
                            action='store_true',
                            help='Ignore cache')
+    argparser.add_argument('--gpu',
+                           default=False,
+                           action='store_true',
+                           help='Use GPU')
     args = argparser.parse_args()
     return args
 
 
 def get_option():
+    # For production
     option = {
-        'small': None,
-        'predict': None,
-        'nocache': None
+        'small': False,
+        'predict': True,
+        'nocache': True,
+        'gpu': True
     }
-    if is_jupyter():
-        option['small'] = False
-        option['predict'] = True
-        option['nocache'] = False
-    else:
+    # for local develop
+    if not is_jupyter():
         args = parse_args()
         option['small'] = args.small
         option['predict'] = args.predict
         option['nocache'] = args.nocache
+        option['gpu'] = False
     return option
 
 
-def xgb_param(debug):
-    if debug:
-        XGB_PARAM = {
-            'n_estimators': 20,
-            'max_depth': 11,
-            'learning_rate': 0.05,
-            'subsample': 0.9,
-            'colsample_bytree': 0.7,
-            'missing': -999,
-            'random_state': 2020
-            # tree_method='gpu_hist'  # THE MAGICAL PARAMETER
-        }
-    else:
-        XGB_PARAM = {
-            'n_estimators': 500,
-            'max_depth': 11,
-            'learning_rate': 0.05,
-            'subsample': 0.9,
-            'colsample_bytree': 0.7,
-            'missing': -999,
-            'random_state': 2020,
-            'tree_method': 'gpu_hist'  # THE MAGICAL PARAMETER
-        }
+def xgb_param(option):
+    XGB_PARAM = {
+        'n_estimators': 500,
+        'max_depth': 11,
+        'learning_rate': 0.05,
+        'subsample': 0.9,
+        'colsample_bytree': 0.7,
+        'missing': -999,
+        'random_state': 2020
+    }
+    if option['small']:
+        XGB_PARAM['n_estimators'] = 20
+    if option['gpu']:
+        XGB_PARAM['tree_method'] = 'gpu_hist'
     return XGB_PARAM
 
 
@@ -78,13 +73,12 @@ def main():
     EXNO = '004'
     option = get_option()
     DATA_DIR = get_datadir()
+    XGB_PARAM = xgb_param(option)
     if option['small']:
         print('Using small dataset & model')
         IN_DIR = f'{DATA_DIR}/003'  # small dataset
-        XGB_PARAM = xgb_param(debug=True)
     else:
         IN_DIR = f'{DATA_DIR}/002'  # full dataset
-        XGB_PARAM = xgb_param(debug=False)
     assert(os.path.exists(IN_DIR))
     OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
