@@ -4,7 +4,7 @@ import pandas as pd
 
 
 class TestEx004:
-    def test_case1(self, mocker, tmpdir):
+    def test_operation(self, mocker, tmpdir):
         EXNO = '004'
         option = {
             'small': False,

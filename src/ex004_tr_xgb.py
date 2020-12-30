@@ -7,7 +7,7 @@ import xgboost as xgb
 import pickle
 import shutil
 import warnings
-from src.util.get_environment import get_datadir, get_exec_env, is_jupyter
+from src.util.get_environment import get_datadir, get_exec_env, is_jupyter, is_gpu
 warnings.filterwarnings("ignore")
 
 
@@ -25,10 +25,6 @@ def parse_args():
                            default=False,
                            action='store_true',
                            help='Ignore cache')
-    argparser.add_argument('--gpu',
-                           default=False,
-                           action='store_true',
-                           help='Use GPU')
     args = argparser.parse_args()
     return args
 
@@ -39,7 +35,6 @@ def get_option():
         'small': False,
         'predict': True,
         'nocache': True,
-        'gpu': True
     }
     # for local develop
     if not is_jupyter():
@@ -47,7 +42,6 @@ def get_option():
         option['small'] = args.small
         option['predict'] = args.predict
         option['nocache'] = args.nocache
-        option['gpu'] = False
     return option
 
 
@@ -62,9 +56,9 @@ def xgb_param(option):
         'random_state': 2020
     }
     if option['small']:
-        XGB_PARAM['n_estimators'] = 20
-    if option['gpu']:
-        XGB_PARAM['tree_method'] = 'gpu_hist'
+        XGB_PARAM.update({'n_estimators': 20})
+    if is_gpu():
+        XGB_PARAM.update({'tree_method': 'gpu_hist'})
     return XGB_PARAM
 
 
