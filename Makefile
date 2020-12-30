@@ -48,7 +48,7 @@ test_environment:
 
 ## Install dependencies
 install:
-	pip install -r requirements.txt
+	pip install -r requirements.txt pip install -r src/requirements.txt pip install -r src/requirements.txt
 
 ## Lint using flake8
 lint:

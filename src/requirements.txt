@@ -1,0 +1,4 @@
+xgboost==1.2.1
+pandas==1.1.5
+numpy==1.18.1
+auto_mix_prep==0.2.0
