@@ -1,5 +1,6 @@
 import os
 import sys
+import torch
 
 
 def get_exec_env() -> (str, str):
@@ -12,6 +13,10 @@ def get_exec_env() -> (str, str):
         return 'colab'
     else:
         return 'local'
+
+
+def is_gpu() -> bool:
+    return torch.cuda.is_available()
 
 
 def is_jupyter() -> bool:
