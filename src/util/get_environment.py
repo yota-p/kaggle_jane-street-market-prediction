@@ -30,9 +30,9 @@ def get_datadir() -> str:
     elif env == 'colab':
         return None
     elif env == 'local':
-        return '../data'
+        return './data'
     else:
-        raise Exception
+        raise ValueError
 
 
 if __name__ == '__main__':

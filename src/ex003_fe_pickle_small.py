@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import shutil
-from util.get_environment import get_datadir
+from src.util.get_environment import get_datadir
 
 
 def main():
@@ -27,6 +27,7 @@ def main():
     IN_DIR = f'{DATA_DIR}/002'
     OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
+    print(DATA_DIR)
 
     df = pd.read_pickle(f'{IN_DIR}/train.pkl')
     print('# Of unique dates before extraction:')
