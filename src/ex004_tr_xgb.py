@@ -7,8 +7,10 @@ import xgboost as xgb
 import pickle
 import shutil
 import warnings
+from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_datadir, get_exec_env, is_jupyter, is_gpu
 warnings.filterwarnings("ignore")
+from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 
 
 def parse_args():
@@ -45,7 +47,12 @@ def get_option():
     return option
 
 
-def xgb_param(option):
+def main():
+    # Setup
+    EXNO = '004'
+    option = get_option()
+    DATA_DIR = get_datadir()
+    IN_DIR = f'{DATA_DIR}/002'
     XGB_PARAM = {
         'n_estimators': 500,
         'max_depth': 11,
@@ -56,57 +63,56 @@ def xgb_param(option):
         'random_state': 2020
     }
     if option['small']:
-        XGB_PARAM.update({'n_estimators': 20})
+        XGB_PARAM.update({'n_estimators': 2})
+        XGB_PARAM.update({'max_depth': 2})
     if is_gpu():
         XGB_PARAM.update({'tree_method': 'gpu_hist'})
-    return XGB_PARAM
 
-
-def main():
-    # Setup
-    EXNO = '004'
-    option = get_option()
-    DATA_DIR = get_datadir()
-    XGB_PARAM = xgb_param(option)
-    if option['small']:
-        print('Using small dataset & model')
-        IN_DIR = f'{DATA_DIR}/003'  # small dataset
-    else:
-        IN_DIR = f'{DATA_DIR}/002'  # full dataset
     assert(os.path.exists(IN_DIR))
     OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
 
     train = pd.read_pickle(f'{IN_DIR}/train.pkl')
     print(f'Input train shape: {train.shape}')
+    features = [c for c in train.columns if 'feature' in c]
 
     # FE
-    # Is the data balanced or not?
-    train = train[train['weight'] != 0]
-    train['action'] = ((train['weight'].values * train['resp'].values) > 0).astype('int')
-
-    X_train = train.loc[:, train.columns.str.contains('feature')]
-    y_train = train.loc[:, 'action']
-    X_train = X_train.fillna(-999)
-    print(f'X_train.shape: {X_train.shape}')
-    print(f'y_train.shape: {y_train.shape}')
-    del train
+    train = train.query('weight > 0').reset_index(drop=True)
+    # train[features = train[features.fillna(method='ffill').fillna(0)
+    train[features] = train[features].fillna(-999)
+    train['action'] = (train['resp'] > 0).astype('int')
+    # train['action'] = ((train['weight'].values * train['resp'].values) > 0).astype('int')
 
     # Train
-    if os.path.exists(f'{OUT_DIR}/model.pkl') and not option['nocache']:
-        print('Using existing model')
-        model = pickle.load(open(f'{OUT_DIR}/model.pkl', 'rb'))
-    else:
+    scores = []
+    n_splits = 3
+    kf = PurgedGroupTimeSeriesSplit(
+        n_splits=n_splits,
+        max_train_group_size=150,
+        group_gap=20,
+        max_test_group_size=60
+    )
+
+    for fold, (tr, te) in enumerate(kf.split(train['action'].values, train['action'].values, train['date'].values)):
+        print(f'Fold {fold}:')
+        X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
+        y_tr, y_val = train.loc[tr, 'action'].values, train.loc[te, 'action'].values
         model = xgb.XGBClassifier(**XGB_PARAM)
-        print('Start training')
-        model.fit(X_train, y_train)
-        print('End training')
-        pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
+        model.fit(X_tr, y_tr,
+                  eval_metric='logloss',
+                  eval_set=[(X_tr, y_tr), (X_val, y_val)])
+        val_pred = model.predict(X_val)
+        score = roc_auc_score(y_val, val_pred)
+        print(f'Fold {fold} roc auc:\t', score)
+        scores.append(score)
+
+        pickle.dump(model, open(f'{OUT_DIR}/model_{fold}.pkl', 'wb'))
+        del model, val_pred, X_tr, X_val, y_tr, y_val, score
 
     # Predict
     if option['predict']:
         if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
-            sys.path.append(os.path.join(os.path.dirname(__file__), f'{DATA_DIR}/001'))
+            sys.path.append(f'{DATA_DIR}/001')
         import janestreet
         env = janestreet.make_env()  # initialize the environment
         iter_test = env.iter_test()  # an iterator which loops over the test set
@@ -115,7 +121,12 @@ def main():
         for (test_df, sample_prediction_df) in iter_test:
             X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
             X_test.fillna(-999)
-            y_preds = model.predict(X_test)
+            X_test = X_test[features].values  # convert into np.ndarray
+
+            y_preds = 0
+            for i in range(n_splits):
+                model = pd.read_pickle(open(f'{OUT_DIR}/model_{fold}.pkl', 'rb'))
+            y_preds += model.predict(X_test) / n_splits
             sample_prediction_df.action = y_preds
             env.predict(sample_prediction_df)
         print('End predicting')

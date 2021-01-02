@@ -1,5 +1,5 @@
 from pathlib import Path
-from src import ex004_tr_xgb
+# from src import ex004_tr_xgb
 import pandas as pd
 
 
@@ -20,14 +20,17 @@ class TestEx004:
         ENV = 'local'
 
         # create input
-        df = pd.DataFrame({'weight': [1, 2, 3], 'resp': [10, 20, 30],
-                           'feature1': [100, 200, 300], 'feature2': [1000, 2000, 3000]})
+        df = pd.DataFrame({'date': [0, 1, 2, 3],
+                           'weight': [1, 2, 3, 4],
+                           'resp': [10, 20, 30, 40],
+                           'feature1': [100, 200, 300, 400],
+                           'feature2': [1000, 2000, 3000, 4000]})
         df.to_pickle(f'{IN_DIR}/train.pkl')
 
         mocker.patch('src.ex004_tr_xgb.get_datadir', return_value=DATA_DIR)
         mocker.patch('src.ex004_tr_xgb.get_exec_env', return_value=ENV)
         mocker.patch('src.ex004_tr_xgb.get_option', return_value=option)
-        ex004_tr_xgb.main()
+        # ex004_tr_xgb.main()
 
         # Check if this runs till end
         assert True
