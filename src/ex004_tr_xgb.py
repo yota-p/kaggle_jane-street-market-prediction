@@ -3,14 +3,16 @@ import sys
 from pathlib import Path
 from argparse import ArgumentParser
 import pandas as pd
+import numpy as np
 import xgboost as xgb
 import pickle
 import shutil
 import warnings
 from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_datadir, get_exec_env, is_jupyter, is_gpu
-warnings.filterwarnings("ignore")
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
+from src.util.calc_utility_score import utility_score_pd
+warnings.filterwarnings("ignore")
 
 
 def parse_args():
@@ -84,7 +86,8 @@ def main():
     # train['action'] = ((train['weight'].values * train['resp'].values) > 0).astype('int')
 
     # Train
-    scores = []
+    scores = pd.DataFrame(index=[], columns=['fold', 'auc', 'utility_val', 'utility_pred'])
+
     n_splits = 3
     kf = PurgedGroupTimeSeriesSplit(
         n_splits=n_splits,
@@ -94,7 +97,7 @@ def main():
     )
 
     for fold, (tr, te) in enumerate(kf.split(train['action'].values, train['action'].values, train['date'].values)):
-        print(f'Fold {fold}:')
+        print(f'Starting Fold {fold}:')
         X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
         y_tr, y_val = train.loc[tr, 'action'].values, train.loc[te, 'action'].values
         model = xgb.XGBClassifier(**XGB_PARAM)
@@ -102,12 +105,22 @@ def main():
                   eval_metric='logloss',
                   eval_set=[(X_tr, y_tr), (X_val, y_val)])
         val_pred = model.predict(X_val)
-        score = roc_auc_score(y_val, val_pred)
-        print(f'Fold {fold} roc auc:\t', score)
-        scores.append(score)
+        auc = roc_auc_score(y_val, val_pred)
+
+        date = train.loc[te, 'date'].values
+        weight = train.loc[te, 'weight'].values
+        resp = train.loc[te, 'resp'].values
+        action = train.loc[te, 'action'].values
+        utility_val = utility_score_pd(date, weight, resp, action)
+        utility_pred = utility_score_pd(date, weight, resp, val_pred)
+        record = pd.Series([fold, auc, utility_val, utility_pred], index=scores.columns)
+        scores = scores.append(record, ignore_index=True)
+        print(f'Fold {fold} auc: {auc}, utility_val: {utility_val}, utility_pred: {utility_pred}')
 
         pickle.dump(model, open(f'{OUT_DIR}/model_{fold}.pkl', 'wb'))
-        del model, val_pred, X_tr, X_val, y_tr, y_val, score
+        del model, val_pred, X_tr, X_val, y_tr, y_val
+
+        scores.to_csv(f'{OUT_DIR}/scores.csv', index=False)
 
     # Predict
     if option['predict']:
@@ -123,11 +136,12 @@ def main():
             X_test.fillna(-999)
             X_test = X_test[features].values  # convert into np.ndarray
 
-            y_preds = 0
+            y_pred = np.zeros(len(X_test))
             for i in range(n_splits):
                 model = pd.read_pickle(open(f'{OUT_DIR}/model_{fold}.pkl', 'rb'))
-            y_preds += model.predict(X_test) / n_splits
-            sample_prediction_df.action = y_preds
+                y_pred += model.predict(X_test) / n_splits
+            y_pred = y_pred > 0
+            sample_prediction_df.action = y_pred.astype(int)
             env.predict(sample_prediction_df)
         print('End predicting')
 
