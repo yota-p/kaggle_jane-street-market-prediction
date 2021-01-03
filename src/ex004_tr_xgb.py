@@ -1,7 +1,6 @@
 import os
 import sys
 from pathlib import Path
-from argparse import ArgumentParser
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -9,44 +8,10 @@ import pickle
 import shutil
 import warnings
 from sklearn.metrics import roc_auc_score
-from src.util.get_environment import get_datadir, get_exec_env, is_jupyter, is_gpu
+from src.util.get_environment import get_datadir, get_option, get_exec_env, is_gpu
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 from src.util.calc_utility_score import utility_score_pd
 warnings.filterwarnings("ignore")
-
-
-def parse_args():
-    argparser = ArgumentParser()
-    argparser.add_argument('--small',
-                           default=False,
-                           action='store_true',
-                           help='Use small data set for debug')
-    argparser.add_argument('--predict',
-                           default=False,
-                           action='store_true',
-                           help='Process predictions')
-    argparser.add_argument('--nocache',
-                           default=False,
-                           action='store_true',
-                           help='Ignore cache')
-    args = argparser.parse_args()
-    return args
-
-
-def get_option():
-    # For production
-    option = {
-        'small': False,
-        'predict': True,
-        'nocache': True,
-    }
-    # for local develop
-    if not is_jupyter():
-        args = parse_args()
-        option['small'] = args.small
-        option['predict'] = args.predict
-        option['nocache'] = args.nocache
-    return option
 
 
 def main():
