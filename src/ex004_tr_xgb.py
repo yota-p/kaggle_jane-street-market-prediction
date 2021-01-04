@@ -16,7 +16,7 @@ from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 warnings.filterwarnings("ignore")
 
 
-def train_xgb(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
+def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
     kf = PurgedGroupTimeSeriesSplit(
         n_splits=n_splits,
         max_train_group_size=150,
@@ -56,6 +56,16 @@ def train_xgb(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
     scores.to_csv(f'{OUT_DIR}/scores.csv', index=False)
 
 
+def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
+    print('Start training')
+    X_train = train.loc[:, features].values
+    y_train = train.loc[:, target].values
+    model = xgb.XGBClassifier(**XGB_PARAM)
+    model.fit(X_train, y_train)
+    pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
+    print('End training')
+
+
 def main():
     # Setup
     EXNO = '004'
@@ -93,10 +103,12 @@ def main():
 
     # Fill missing values
     train[features] = train[features].fillna(method='ffill').fillna(0)
+    # train[features] = train[features].fillna(-999)
 
     # Train
     if not option['notrain']:
-        train_xgb(train, features, target, XGB_PARAM, n_splits, OUT_DIR)
+        # train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR)
+        train_xgb(train, features, target, XGB_PARAM, OUT_DIR)
 
     # Predict
     if not option['nopredict']:
@@ -107,9 +119,15 @@ def main():
         iter_test = env.iter_test()  # an iterator which loops over the test set
 
         models = []
+        '''
         for i in range(n_splits):
             model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
             models.append(model)
+        '''
+
+        models.append(pd.read_pickle(open(f'{OUT_DIR}/model.pkl', 'rb')))
+
+        print(f'Using {len(models)} models')
 
         print('Start predicting')
         time_start = time.time()
@@ -122,13 +140,15 @@ def main():
         # Using high-performance nan forward-filling logic by Yirun Zhang
         tmp = np.zeros(len(features))  # this np.ndarray will contain last seen values for features
         for (test_df, sample_prediction_df) in iter_test:  # iter_test generates test_df(1*130)
-            x_tt = test_df.loc[:, features].values  # this is 1*130 array([[values...]])
-            x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
-            tmp = x_tt[0, :]  # save last seen values to tmp
+            X_test = test_df.loc[:, features].values  # this is 1*130 array([[values...]])
+            X_test[0, :] = fast_fillna(X_test[0, :], tmp)  # use values in tmp to replace nan
+            tmp = X_test[0, :]  # save last seen values to tmp
+
+            # X_test = test_df.loc[:, features].fillna(-999).values
 
             y_pred = 0.
             for model in models:
-                y_pred += model.predict(x_tt) / n_splits
+                y_pred += model.predict(X_test) / n_splits
             y_pred = y_pred > 0
             sample_prediction_df.action = y_pred.astype(int)
             env.predict(sample_prediction_df)
