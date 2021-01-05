@@ -37,7 +37,6 @@ def main():
     print(df.info())  # The dataframe size has decreased to 630MB (75% less).
 
     # Save reduced data
-    print(dfnew.dtypes)
     dfnew.dtypes.to_csv(f'{OUT_DIR}/train_dtypes.csv', header=False)
     dfnew.to_pickle(f'{OUT_DIR}/train.pkl')
     del df, dfnew
