@@ -2,68 +2,32 @@ import os
 import sys
 import time
 from pathlib import Path
+from argparse import ArgumentParser
 import pandas as pd
-import numpy as np
 import xgboost as xgb
 import pickle
 import shutil
 import warnings
-from sklearn.metrics import roc_auc_score
-from src.util.get_environment import get_datadir, get_option, get_exec_env, is_gpu
-from src.util.fast_fillna import fast_fillna
-from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
-# from src.util.calc_utility_score import utility_score_pd
+from src.util.get_environment import get_datadir, get_exec_env, is_gpu, get_option
 warnings.filterwarnings("ignore")
 
 
-def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
-    kf = PurgedGroupTimeSeriesSplit(
-        n_splits=n_splits,
-        max_train_group_size=150,
-        group_gap=20,
-        max_test_group_size=60
-    )
-    # scores = pd.DataFrame(index=[], columns=['fold', 'auc', 'utility_val', 'utility_pred'])
-    scores = pd.DataFrame(index=[], columns=['fold', 'auc'])
-    for fold, (tr, te) in enumerate(kf.split(train[target].values, train[target].values, train['date'].values)):
-        print(f'Starting Fold {fold}:')
-        X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
-        y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
-        model = xgb.XGBClassifier(**XGB_PARAM)
-        model.fit(X_tr, y_tr,
-                  eval_metric='logloss',
-                  eval_set=[(X_tr, y_tr), (X_val, y_val)])
-        val_pred = model.predict(X_val)
-        auc = roc_auc_score(y_val, val_pred)
-
-        '''
-        date = train.loc[te, 'date'].values
-        weight = train.loc[te, 'weight'].values
-        resp = train.loc[te, 'resp'].values
-        action = train.loc[te, 'action'].values
-        utility_val = utility_score_pd(date, weight, resp, action)
-        utility_pred = utility_score_pd(date, weight, resp, val_pred)
-        record = pd.Series([fold, auc, utility_val, utility_pred], index=scores.columns)
-        '''
-        record = pd.Series([fold, auc], index=scores.columns)
-        scores = scores.append(record, ignore_index=True)
-        # print(f'Fold {fold} auc: {auc}, utility_val: {utility_val}, utility_pred: {utility_pred}')
-        print(f'Fold {fold} auc: {auc}')
-
-        pickle.dump(model, open(f'{OUT_DIR}/model_{fold}.pkl', 'wb'))
-        del model, val_pred, X_tr, X_val, y_tr, y_val
-
-    scores.to_csv(f'{OUT_DIR}/scores.csv', index=False)
-
-
-def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
-    print('Start training')
-    X_train = train.loc[:, features].values
-    y_train = train.loc[:, target].values
-    model = xgb.XGBClassifier(**XGB_PARAM)
-    model.fit(X_train, y_train)
-    pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
-    print('End training')
+def parse_args():
+    argparser = ArgumentParser()
+    argparser.add_argument('--small',
+                           default=False,
+                           action='store_true',
+                           help='Use small data set for debug')
+    argparser.add_argument('--predict',
+                           default=False,
+                           action='store_true',
+                           help='Process predictions')
+    argparser.add_argument('--nocache',
+                           default=False,
+                           action='store_true',
+                           help='Ignore cache')
+    args = argparser.parse_args()
+    return args
 
 
 def main():
@@ -71,7 +35,6 @@ def main():
     EXNO = '004'
     option = get_option()
     DATA_DIR = get_datadir()
-    IN_DIR = f'{DATA_DIR}/002'
     XGB_PARAM = {
         'n_estimators': 500,
         'max_depth': 11,
@@ -86,75 +49,55 @@ def main():
         XGB_PARAM.update({'max_depth': 2})
     if is_gpu():
         XGB_PARAM.update({'tree_method': 'gpu_hist'})
-    n_splits = 3
-
+    IN_DIR = f'{DATA_DIR}/002'  # full dataset
     assert(os.path.exists(IN_DIR))
     OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
 
-    # FE
     train = pd.read_pickle(f'{IN_DIR}/train.pkl')
     print(f'Input train shape: {train.shape}')
-    target = 'action'
-    features = [c for c in train.columns if 'feature' in c]
 
-    train = train.query('weight > 0').reset_index(drop=True)
-    train[target] = (train['resp'] > 0).astype('int')
+    # FE
+    # Is the data balanced or not?
+    train = train[train['weight'] != 0]
+    train['action'] = ((train['weight'].values * train['resp'].values) > 0).astype('int')
 
-    # Fill missing values
-    train[features] = train[features].fillna(method='ffill').fillna(0)
-    # train[features] = train[features].fillna(-999)
+    X_train = train.loc[:, train.columns.str.contains('feature')]
+    y_train = train.loc[:, 'action']
+    X_train = X_train.fillna(-999)
+    print(f'X_train.shape: {X_train.shape}')
+    print(f'y_train.shape: {y_train.shape}')
+    del train
 
     # Train
-    if not option['notrain']:
-        # train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR)
-        train_xgb(train, features, target, XGB_PARAM, OUT_DIR)
+    if os.path.exists(f'{OUT_DIR}/model.pkl') and not option['nocache']:
+        print('Using existing model')
+        model = pickle.load(open(f'{OUT_DIR}/model.pkl', 'rb'))
+    else:
+        model = xgb.XGBClassifier(**XGB_PARAM)
+        print('Start training')
+        model.fit(X_train.values, y_train.values)
+        print('End training')
+        pickle.dump(model, open(f'{OUT_DIR}/model.pkl', 'wb'))
 
     # Predict
     if not option['nopredict']:
         if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
-            sys.path.append(f'{DATA_DIR}/001')
+            sys.path.append(os.path.join(os.path.dirname(__file__), f'../{DATA_DIR}/001'))
         import janestreet
         env = janestreet.make_env()  # initialize the environment
         iter_test = env.iter_test()  # an iterator which loops over the test set
 
-        models = []
-        '''
-        for i in range(n_splits):
-            model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
-            models.append(model)
-        '''
-
-        models.append(pd.read_pickle(open(f'{OUT_DIR}/model.pkl', 'rb')))
-
-        print(f'Using {len(models)} models')
-
         print('Start predicting')
         time_start = time.time()
-        '''
-        Note: Be aware of the performance in the 'for' loop!
-        Prediction API generates 1*130 DataFrame per iteration.
-        Which means you need to process every record separately. (no vectorization)
-        If the performance in 'for' loop is poor, it'll result in submission timeout.
-        '''
-        # Using high-performance nan forward-filling logic by Yirun Zhang
-        tmp = np.zeros(len(features))  # this np.ndarray will contain last seen values for features
-        for (test_df, sample_prediction_df) in iter_test:  # iter_test generates test_df(1*130)
-            X_test = test_df.loc[:, features].values  # this is 1*130 array([[values...]])
-            X_test[0, :] = fast_fillna(X_test[0, :], tmp)  # use values in tmp to replace nan
-            tmp = X_test[0, :]  # save last seen values to tmp
-
-            # X_test = test_df.loc[:, features].fillna(-999).values
-
-            y_pred = 0.
-            for model in models:
-                y_pred += model.predict(X_test) / n_splits
-            y_pred = y_pred > 0
-            sample_prediction_df.action = y_pred.astype(int)
+        for (test_df, sample_prediction_df) in iter_test:
+            X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
+            X_test.fillna(-999)
+            y_preds = model.predict(X_test.values)
+            sample_prediction_df.action = y_preds
             env.predict(sample_prediction_df)
-
-        elapsed_time = time.time() - time_start
         print('End predicting')
+        elapsed_time = time.time() - time_start
         test_len = 15219  # length of test data (for developing API)
         print(f'Elapsed time: {elapsed_time}, Prediction speed: {test_len / elapsed_time} iter/s')
 
