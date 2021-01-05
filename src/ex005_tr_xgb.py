@@ -155,6 +155,7 @@ def main():
     if is_gpu():
         XGB_PARAM.update({'tree_method': 'gpu_hist'})
     n_splits = 3
+    # cv = None, method_fillna = '-999' will result same as ex004
     cv = None
     # cv = 'PurgedGroupTimeSeriesSplit'
     method_fillna = '-999'
