@@ -34,6 +34,10 @@ runsd: dir
 jupyter:
 	./startup-jupyter.sh
 
+## Start mlflow server
+mlflow:
+	./startup-mlflow.sh
+
 ## Test
 test:
 	python setup.py test
