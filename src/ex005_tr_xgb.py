@@ -178,12 +178,12 @@ def main():
     if is_gpu():
         XGB_PARAM.update({'tree_method': 'gpu_hist'})
 
+    tracking_uri = f'{DATA_DIR}/mlruns'
     experiment_name = 'ex005_tr_xgb'
     if option['small']:
         experiment_name += '_small'
-    tracking_uri = f'{DATA_DIR}/mlruns'
-    mlflow.set_experiment(experiment_name)
     mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(experiment_name)
     mlflow.start_run()
     mlflow.log_param('is_gpu', is_gpu())
 
