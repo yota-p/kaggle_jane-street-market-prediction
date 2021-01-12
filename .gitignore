@@ -148,3 +148,7 @@ src.egg-info/
 .pytest_cache/n
 
 script/script.py
+
+# server logs
+mlflow.log
+nohup.out
