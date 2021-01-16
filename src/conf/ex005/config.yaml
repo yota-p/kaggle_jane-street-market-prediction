@@ -1,0 +1,11 @@
+EXNO: '005'
+method_fillna: '-999'  # '-999' or 'forward'
+option: 
+  small: true
+  nocache: true
+  notrain: false
+  nopredict: true
+
+defaults:
+  - cvStrategy: nocv  # 'nocv' or 'PurgedGroupTimeSeriesSplit'
+  - model: XGBClassifier

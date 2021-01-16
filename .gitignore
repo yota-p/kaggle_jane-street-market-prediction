@@ -152,3 +152,6 @@ script/script.py
 # server logs
 mlflow.log
 nohup.out
+
+# hydra
+outputs/

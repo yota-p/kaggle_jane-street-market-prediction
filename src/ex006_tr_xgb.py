@@ -6,13 +6,11 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import mlflow
-import hydra
 import pickle
 import shutil
-import pprint
 import warnings
 from sklearn.metrics import roc_auc_score
-from src.util.get_environment import get_exec_env, is_gpu
+from src.util.get_environment import get_datadir, get_option, get_exec_env, is_gpu
 from src.util.fast_fillna import fast_fillna
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 # from src.util.calc_utility_score import utility_score_pd
@@ -20,7 +18,7 @@ warnings.filterwarnings("ignore")
 
 
 def create_janeapi():
-    DATA_DIR = hydra.utils.get_original_cwd() + '/data'
+    DATA_DIR = get_datadir()
     if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
         sys.path.append(f'{DATA_DIR}/001')
     import janestreet
@@ -88,23 +86,6 @@ def predict_fillna_999(models, features, target, OUT_DIR):
     mlflow.log_artifact(file)
 
 
-def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
-    print('Start training')
-    mlflow.log_params(XGB_PARAM)
-    mlflow.log_param('features', features)
-
-    X_train = train.loc[:, features].values
-    y_train = train.loc[:, target].values
-    model = xgb.XGBClassifier(**XGB_PARAM)
-    model.fit(X_train, y_train)
-
-    file = f'{OUT_DIR}/model_0.pkl'
-    pickle.dump(model, open(file, 'wb'))
-    mlflow.log_artifact(file)
-    print(f'Saved model {file}')
-    print('End training')
-
-
 def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
     mlflow.log_params(XGB_PARAM)
     mlflow.log_param('features', features)
@@ -116,9 +97,11 @@ def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
         group_gap=20,
         max_test_group_size=60
     )
+    # scores = pd.DataFrame(index=[], columns=['fold', 'auc', 'utility_val', 'utility_pred'])
+    # scores = pd.DataFrame(index=[], columns=['fold', 'auc'])
     scores = []
     for fold, (tr, te) in enumerate(kf.split(train[target].values, train[target].values, train['date'].values)):
-        pprint(f'Starting Fold {fold}:')
+        print(f'Starting Fold {fold}:')
         X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
         y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
         model = xgb.XGBClassifier(**XGB_PARAM)
@@ -140,23 +123,56 @@ def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
         score = {'fold': fold, 'auc': auc}
         scores.append(score)
         mlflow.log_metrics(score)
+        # record = pd.Series([fold, auc], index=scores.columns)
+        # scores = scores.append(record, ignore_index=True)
         # print(f'Fold {fold} auc: {auc}, utility_val: {utility_val}, utility_pred: {utility_pred}')
         # print(f'Fold {fold} auc: {auc}')
 
+        # pickle.dump(model, open(f'{OUT_DIR}/model_{fold}.pkl', 'wb'))
+        # pickle.dump(model, open(f'{OUT_DIR}/model_{fold}.pkl', 'wb'))
         file = f'{OUT_DIR}/model_{fold}.pkl'
         pickle.dump(model, open(file, 'wb'))
         mlflow.log_artifact(file)
         del model, val_pred, X_tr, X_val, y_tr, y_val
 
+    # scores.to_csv(f'{OUT_DIR}/scores.csv', index=False)
 
-@hydra.main(config_path="conf/ex005", config_name="config")
-def main(cfg) -> None:
-    print(cfg)
+
+def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
+    print('Start training')
+    mlflow.log_params(XGB_PARAM)
+    mlflow.log_param('features', features)
+
+    X_train = train.loc[:, features].values
+    y_train = train.loc[:, target].values
+    model = xgb.XGBClassifier(**XGB_PARAM)
+    model.fit(X_train, y_train)
+
+    file = f'{OUT_DIR}/model_0.pkl'
+    pickle.dump(model, open(file, 'wb'))
+    mlflow.log_artifact(file)
+    print('End training')
+
+
+def main():
     # Setup
-    DATA_DIR = hydra.utils.get_original_cwd() + '/data'
+    EXNO = '005'
+    option = get_option()
+    DATA_DIR = get_datadir()
     IN_DIR = f'{DATA_DIR}/002'
-    XGB_PARAM = cfg.model.param
-    if cfg.option.small:
+    method_fillna = '-999'  # '-999' or 'forward'
+    cv = None  # None or 'PurgedGroupTimeSeriesSplit'
+    n_splits = 3
+    XGB_PARAM = {
+        'n_estimators': 500,
+        'max_depth': 11,
+        'learning_rate': 0.05,
+        'subsample': 0.9,
+        'colsample_bytree': 0.7,
+        'missing': -999,
+        'random_state': 2020
+    }
+    if option['small']:
         XGB_PARAM.update({'n_estimators': 2})
         XGB_PARAM.update({'max_depth': 2})
     if is_gpu():
@@ -164,7 +180,7 @@ def main(cfg) -> None:
 
     tracking_uri = f'{DATA_DIR}/mlruns'
     experiment_name = 'ex005_tr_xgb'
-    if cfg.option.small:
+    if option['small']:
         experiment_name += '_small'
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
@@ -172,7 +188,7 @@ def main(cfg) -> None:
     mlflow.log_param('is_gpu', is_gpu())
 
     assert(os.path.exists(IN_DIR))
-    OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
+    OUT_DIR = f'{DATA_DIR}/{EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
 
     # FE
@@ -185,40 +201,34 @@ def main(cfg) -> None:
     train[target] = (train['resp'] > 0).astype('int')
 
     # Fill missing values
-    mlflow.log_param('method_fillna', cfg.method_fillna)
-    if cfg.method_fillna == '-999':
+    mlflow.log_param('method_fillna', method_fillna)
+    if method_fillna == '-999':
         train[features] = train[features].fillna(-999)
-    elif cfg.method_fillna == 'forward':
+    elif method_fillna == 'forward':
         train[features] = train[features].fillna(method='ffill').fillna(0)
 
     # Train
-    if not cfg.option.notrain:
-        mlflow.log_param('cvStrategy', cfg.cvStrategy)
-        if cfg.cvStrategy.name is None:
+    if not option['notrain']:
+        mlflow.log_param('cv', cv)
+        if cv is None:
             train_xgb(train, features, target, XGB_PARAM, OUT_DIR)
-        elif cfg.cvStrategy.name == 'PurgedGroupTimeSeriesSplit':
-            train_xgb_cv(train, features, target, XGB_PARAM, cfg.cvStrategy.n_splits, OUT_DIR)
-        else:
-            raise ValueError(f'Invalid cvStrategy: {cfg.cvStrategy}')
+        elif cv == 'PurgedGroupTimeSeriesSplit':
+            train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR)
 
     # Predict
-    if cfg.cvStrategy.name is None:
-        n_models = 1
-    else:
-        n_models = cfg.cvStragety.n_splits
+    if cv is None:
+        n_splits = 1
 
-    if not cfg.option.nopredict:
+    if not option['nopredict']:
         models = []
-        for i in range(n_models):
+        for i in range(n_splits):
             model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
             models.append(model)
 
-        if cfg.method_fillna == '-999':
+        if method_fillna == '-999':
             predict_fillna_999(models, features, target, OUT_DIR)
-        elif cfg.method_fillna == 'forward':
+        elif method_fillna == 'forward':
             predict_fillna_forward(models, features, target, OUT_DIR)
-        else:
-            raise ValueError(f'Invalid method_fillna: {cfg.method_fillna}')
 
 
 if __name__ == '__main__':
