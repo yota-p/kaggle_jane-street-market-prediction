@@ -2,9 +2,8 @@ EXNO: '005'
 method_fillna: '-999'  # '-999' or 'forward'
 option: 
   small: true
-  nocache: true
-  notrain: false
-  nopredict: true
+  train: true
+  predict: true
 
 defaults:
   - cvStrategy: nocv  # 'nocv' or 'PurgedGroupTimeSeriesSplit'

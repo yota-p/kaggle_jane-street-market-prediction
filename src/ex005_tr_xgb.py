@@ -101,7 +101,6 @@ def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
     file = f'{OUT_DIR}/model_0.pkl'
     pickle.dump(model, open(file, 'wb'))
     mlflow.log_artifact(file)
-    print(f'Saved model {file}')
     print('End training')
 
 
@@ -156,9 +155,6 @@ def main(cfg) -> None:
     DATA_DIR = hydra.utils.get_original_cwd() + '/data'
     IN_DIR = f'{DATA_DIR}/002'
     XGB_PARAM = cfg.model.param
-    if cfg.option.small:
-        XGB_PARAM.update({'n_estimators': 2})
-        XGB_PARAM.update({'max_depth': 2})
     if is_gpu():
         XGB_PARAM.update({'tree_method': 'gpu_hist'})
 
@@ -192,7 +188,7 @@ def main(cfg) -> None:
         train[features] = train[features].fillna(method='ffill').fillna(0)
 
     # Train
-    if not cfg.option.notrain:
+    if cfg.option.train:
         mlflow.log_param('cvStrategy', cfg.cvStrategy)
         if cfg.cvStrategy.name is None:
             train_xgb(train, features, target, XGB_PARAM, OUT_DIR)
@@ -201,13 +197,16 @@ def main(cfg) -> None:
         else:
             raise ValueError(f'Invalid cvStrategy: {cfg.cvStrategy}')
 
+    file = f'{OUT_DIR}/model_0.pkl'
+    mlflow.log_artifact(file)
+
     # Predict
     if cfg.cvStrategy.name is None:
         n_models = 1
     else:
         n_models = cfg.cvStragety.n_splits
 
-    if not cfg.option.nopredict:
+    if cfg.option.predict:
         models = []
         for i in range(n_models):
             model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
