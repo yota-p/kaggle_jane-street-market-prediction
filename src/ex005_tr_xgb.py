@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 from pathlib import Path
@@ -15,11 +14,11 @@ from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_exec_env, is_gpu
 from src.util.fast_fillna import fast_fillna
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
-# from src.util.calc_utility_score import utility_score_pd
+from src.util.calc_utility_score import utility_score_pd
 warnings.filterwarnings("ignore")
 
 
-def create_janeapi():
+def create_janeapi() -> (object, object):
     DATA_DIR = hydra.utils.get_original_cwd() + '/data'
     if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
         sys.path.append(f'{DATA_DIR}/001')
@@ -29,7 +28,7 @@ def create_janeapi():
     return env, iter_test
 
 
-def predict_fillna_forward(models, features, target, OUT_DIR):
+def predict_fillna_forward(models: list, features: list, target: str, OUT_DIR: str) -> None:
     '''
     Using high-performance nan forward-filling logic by Yirun Zhang
     Note: Be aware of the performance in the 'for' loop!
@@ -61,7 +60,7 @@ def predict_fillna_forward(models, features, target, OUT_DIR):
     shutil.move('submission.csv', f'{OUT_DIR}/submission.csv')
 
 
-def predict_fillna_999(models, features, target, OUT_DIR):
+def predict_fillna_999(models: list, features: list, target: str, OUT_DIR: str) -> None:
     env, iter_test = create_janeapi()
 
     print('Start predicting')
@@ -88,14 +87,12 @@ def predict_fillna_999(models, features, target, OUT_DIR):
     mlflow.log_artifact(file)
 
 
-def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
+def train_xgb(train: pd.DataFrame, features: list, target: str, model_param: dict, OUT_DIR: str) -> None:
     print('Start training')
-    mlflow.log_params(XGB_PARAM)
-    mlflow.log_param('features', features)
 
     X_train = train.loc[:, features].values
     y_train = train.loc[:, target].values
-    model = xgb.XGBClassifier(**XGB_PARAM)
+    model = xgb.XGBClassifier(**model_param)
     model.fit(X_train, y_train)
 
     file = f'{OUT_DIR}/model_0.pkl'
@@ -104,118 +101,97 @@ def train_xgb(train, features, target, XGB_PARAM, OUT_DIR):
     print('End training')
 
 
-def train_xgb_cv(train, features, target, XGB_PARAM, n_splits, OUT_DIR):
-    mlflow.log_params(XGB_PARAM)
-    mlflow.log_param('features', features)
-    mlflow.log_param('n_splits', n_splits)
-
-    kf = PurgedGroupTimeSeriesSplit(
-        n_splits=n_splits,
-        max_train_group_size=150,
-        group_gap=20,
-        max_test_group_size=60
-    )
+def train_xgb_cv(train: pd.DataFrame, features: list, target: str, model_param: dict, cv_param: dict, OUT_DIR: str) -> None:
+    kf = PurgedGroupTimeSeriesSplit(**cv_param)
     scores = []
-    for fold, (tr, te) in enumerate(kf.split(train[target].values, train[target].values, train['date'].values)):
+    for fold, (tr, te) in enumerate(kf.split(train.loc[target].values, train[target].values, train['date'].values)):
         pprint(f'Starting Fold {fold}:')
         X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
         y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
-        model = xgb.XGBClassifier(**XGB_PARAM)
+        model = xgb.XGBClassifier(**model_param)
         model.fit(X_tr, y_tr,
                   eval_metric='logloss',
                   eval_set=[(X_tr, y_tr), (X_val, y_val)])
         val_pred = model.predict(X_val)
         auc = roc_auc_score(y_val, val_pred)
 
-        '''
         date = train.loc[te, 'date'].values
         weight = train.loc[te, 'weight'].values
         resp = train.loc[te, 'resp'].values
         action = train.loc[te, 'action'].values
         utility_val = utility_score_pd(date, weight, resp, action)
         utility_pred = utility_score_pd(date, weight, resp, val_pred)
-        record = pd.Series([fold, auc, utility_val, utility_pred], index=scores.columns)
-        '''
-        score = {'fold': fold, 'auc': auc}
-        scores.append(score)
+
+        score = {'fold': fold, 'auc': auc, 'utility_val': utility_val, 'utility_pred': utility_pred}
+
         mlflow.log_metrics(score)
-        # print(f'Fold {fold} auc: {auc}, utility_val: {utility_val}, utility_pred: {utility_pred}')
-        # print(f'Fold {fold} auc: {auc}')
+        scores.append(score)
+        print(score)
 
         file = f'{OUT_DIR}/model_{fold}.pkl'
         pickle.dump(model, open(file, 'wb'))
         mlflow.log_artifact(file)
-        del model, val_pred, X_tr, X_val, y_tr, y_val
+        del model, val_pred, X_tr, X_val, y_tr, y_val, date, weight, resp, action, utility_val, utility_pred
 
 
-@hydra.main(config_path="conf/ex005", config_name="config")
+@hydra.main(config_path="../conf/ex005", config_name="config")
 def main(cfg) -> None:
     print(cfg)
-    # Setup
     DATA_DIR = hydra.utils.get_original_cwd() + '/data'
-    IN_DIR = f'{DATA_DIR}/002'
-    XGB_PARAM = cfg.model.param
-    if is_gpu():
-        XGB_PARAM.update({'tree_method': 'gpu_hist'})
 
+    # follow these sequences: uri > experiment > run > others
     tracking_uri = f'{DATA_DIR}/mlruns'
-    experiment_name = 'ex005_tr_xgb'
-    if cfg.option.small:
-        experiment_name += '_small'
-    mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment_name)
+    mlflow.set_tracking_uri(tracking_uri)  # uri must be set before set_experiment
+    mlflow.set_experiment(cfg.mlflow.experiment.name)
     mlflow.start_run()
-    mlflow.log_param('is_gpu', is_gpu())
+    mlflow.set_tags(cfg.mlflow.experiment.tags)
 
-    assert(os.path.exists(IN_DIR))
+    mlflow.log_param('method_fillna', cfg.method_fillna)
+    mlflow.log_param('cv.name', cfg.cv.name)
+    mlflow.log_params(cfg.cv.param)
+    mlflow.log_params(cfg.model.param)
+    mlflow.log_param('features', cfg.features)
+
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
+    if is_gpu():  # check if you're utilizing gpu if present
+        assert cfg.model.param.tree_method == 'gpu_hist'
 
     # FE
-    train = pd.read_pickle(f'{IN_DIR}/train.pkl')
+    train = pd.read_pickle(f'{DATA_DIR}/{cfg.in_files.train_in1}')
     print(f'Input train shape: {train.shape}')
     target = 'action'
-    features = [c for c in train.columns if 'feature' in c]
 
     train = train.query('weight > 0').reset_index(drop=True)
     train[target] = (train['resp'] > 0).astype('int')
 
     # Fill missing values
-    mlflow.log_param('method_fillna', cfg.method_fillna)
     if cfg.method_fillna == '-999':
-        train[features] = train[features].fillna(-999)
+        # train[cfg.features] = train[cfg.features].fillna(-999)
+        train.loc[:, cfg.features] = train.loc[:, cfg.features].fillna(-999)
     elif cfg.method_fillna == 'forward':
-        train[features] = train[features].fillna(method='ffill').fillna(0)
+        train.loc[:, cfg.features] = train.loc[:, cfg.features].fillna(method='ffill').fillna(0)
 
     # Train
     if cfg.option.train:
-        mlflow.log_param('cvStrategy', cfg.cvStrategy)
-        if cfg.cvStrategy.name is None:
-            train_xgb(train, features, target, XGB_PARAM, OUT_DIR)
-        elif cfg.cvStrategy.name == 'PurgedGroupTimeSeriesSplit':
-            train_xgb_cv(train, features, target, XGB_PARAM, cfg.cvStrategy.n_splits, OUT_DIR)
+        if cfg.cv.name == 'nocv':
+            train_xgb(train, cfg.features, target, cfg.model.param, OUT_DIR)
+        elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
+            train_xgb_cv(train, cfg.features, target, cfg.model.param, cfg.cv.param, OUT_DIR)
         else:
-            raise ValueError(f'Invalid cvStrategy: {cfg.cvStrategy}')
-
-    file = f'{OUT_DIR}/model_0.pkl'
-    mlflow.log_artifact(file)
+            raise ValueError(f'Invalid cv: {cfg.cv}')
 
     # Predict
-    if cfg.cvStrategy.name is None:
-        n_models = 1
-    else:
-        n_models = cfg.cvStragety.n_splits
-
     if cfg.option.predict:
         models = []
-        for i in range(n_models):
+        for i in range(cfg.cv.param.n_splits):
             model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
             models.append(model)
 
         if cfg.method_fillna == '-999':
-            predict_fillna_999(models, features, target, OUT_DIR)
+            predict_fillna_999(models, list(cfg.features), target, OUT_DIR)
         elif cfg.method_fillna == 'forward':
-            predict_fillna_forward(models, features, target, OUT_DIR)
+            predict_fillna_forward(models, list(cfg.features), target, OUT_DIR)
         else:
             raise ValueError(f'Invalid method_fillna: {cfg.method_fillna}')
 
