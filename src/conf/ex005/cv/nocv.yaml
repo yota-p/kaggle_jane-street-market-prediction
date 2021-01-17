@@ -1,0 +1,4 @@
+# @package _group_
+name: 'nocv'
+param:
+  n_splits: 1
