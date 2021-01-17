@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 from pathlib import Path
@@ -18,8 +19,27 @@ from src.util.calc_utility_score import utility_score_pd
 warnings.filterwarnings("ignore")
 
 
+def get_original_cwd() -> str:
+    '''
+    Returns original working directory for execution.
+    In CLI, hydra changes cwd to outputs/xxx.
+    In Jupyter Notebook, hydra doesn't change cwd.
+    This is due to that you need to initialize & compose hydra config using compose API in Jupyter.
+    Under compose API, hydra.core.hydra_config.HydraConfig is not initialized.
+    Thus, in Jupyter Notebook, you need to avoid calling hydra.utils.get_original_cwd().
+    Refer:
+    https://github.com/facebookresearch/hydra/issues/828
+    https://github.com/facebookresearch/hydra/blob/master/hydra/core/hydra_config.py
+    https://github.com/facebookresearch/hydra/blob/master/hydra/utils.py
+    '''
+    if hydra.core.hydra_config.HydraConfig.initialized():
+        return hydra.utils.get_original_cwd()
+    else:
+        return os.getcwd()
+
+
 def create_janeapi() -> (object, object):
-    DATA_DIR = hydra.utils.get_original_cwd() + '/data'
+    DATA_DIR = get_original_cwd() + '/data'
     if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
         sys.path.append(f'{DATA_DIR}/001')
     import janestreet
@@ -137,7 +157,7 @@ def train_xgb_cv(train: pd.DataFrame, features: list, target: str, model_param: 
 @hydra.main(config_path="../conf/ex005", config_name="config")
 def main(cfg) -> None:
     print(cfg)
-    DATA_DIR = hydra.utils.get_original_cwd() + '/data'
+    DATA_DIR = get_original_cwd() + '/data'
 
     # follow these sequences: uri > experiment > run > others
     tracking_uri = f'{DATA_DIR}/mlruns'
