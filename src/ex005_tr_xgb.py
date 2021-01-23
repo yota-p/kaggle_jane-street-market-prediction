@@ -165,6 +165,7 @@ def main(cfg) -> None:
     mlflow.set_experiment(cfg.mlflow.experiment.name)
     mlflow.start_run()
     mlflow.set_tags(cfg.mlflow.experiment.tags)
+    mlflow.log_artifacts('.hydra/')
 
     mlflow.log_param('method_fillna', cfg.method_fillna)
     mlflow.log_param('cv.name', cfg.cv.name)
