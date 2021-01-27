@@ -1,3 +1,4 @@
+import os
 import gzip
 import base64
 from pathlib import Path
@@ -11,7 +12,7 @@ def main():
     for path, encoded in file_data.items():
         print(path)
         path = Path(path)
-        path.parent.mkdir(exist_ok=True)
+        os.makedirs(str(path.parent), exist_ok=True)
         path.write_bytes(gzip.decompress(base64.b64decode(encoded)))
 
 

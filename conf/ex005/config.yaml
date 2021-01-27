@@ -1,0 +1,20 @@
+mlflow:
+  experiment:
+    name: ex005_tr_xgb
+    tags: 
+      exec: dev  # dev, test, prd
+
+EXNO: '005'
+
+option:
+  train: true
+  predict: true
+
+target: action
+method_fillna: '-999'  # -999, forward
+
+defaults:
+  - feature:
+      raw
+  - cv: nocv  # nocv, pgts
+  - model: XGBClassifier

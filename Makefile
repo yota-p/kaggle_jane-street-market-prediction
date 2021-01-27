@@ -43,7 +43,7 @@ test:
 	python setup.py test
 
 ## Create base64 encoded script from src/
-encode:
+encode: clean
 	python encode.py
 
 ## Test python environment is setup correctly
