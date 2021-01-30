@@ -36,6 +36,11 @@ def main():
     dfnew.memory_usage(deep=True)
     print(df.info())  # The dataframe size has decreased to 630MB (75% less).
 
+    # cut weight <= 0
+    dfnew = dfnew.query('weight > 0').reset_index(drop=True)
+    # add target column
+    dfnew['action'] = (dfnew['resp'] > 0).astype('int')
+
     # Save reduced data
     dfnew.dtypes.to_csv(f'{OUT_DIR}/train_dtypes.csv', header=False)
     dfnew.to_pickle(f'{OUT_DIR}/train.pkl')
