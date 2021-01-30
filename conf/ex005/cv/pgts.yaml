@@ -1,7 +1,0 @@
-# @package _group_
-name: 'PurgedGroupTimeSeriesSplit'
-param:
-  n_splits: 3
-  max_train_group_size: 150
-  group_gap: 20
-  max_test_group_size: 60
