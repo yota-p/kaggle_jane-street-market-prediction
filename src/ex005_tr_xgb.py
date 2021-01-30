@@ -167,7 +167,7 @@ def main(cfg) -> None:
     mlflow.set_tags(cfg.mlflow.experiment.tags)
     mlflow.log_artifacts('.hydra/')
 
-    mlflow.log_param('method_fillna', cfg.method_fillna)
+    mlflow.log_param('feature_engineering', cfg.feature_engineering)
     mlflow.log_param('cv.name', cfg.cv.name)
     mlflow.log_params(cfg.cv.param)
     mlflow.log_params(cfg.model.param)
@@ -193,9 +193,9 @@ def main(cfg) -> None:
     train[cfg.target] = (train['resp'] > 0).astype('int')
 
     # Fill missing values
-    if cfg.method_fillna == '-999':
+    if cfg.feature_engineering.method_fillna == '-999':
         train.loc[:, features] = train.loc[:, features].fillna(-999)
-    elif cfg.method_fillna == 'forward':
+    elif cfg.feature_engineering.method_fillna == 'forward':
         train.loc[:, features] = train.loc[:, features].fillna(method='ffill').fillna(0)
 
     # Train
@@ -214,12 +214,12 @@ def main(cfg) -> None:
             model = pd.read_pickle(open(f'{OUT_DIR}/model_{i}.pkl', 'rb'))
             models.append(model)
 
-        if cfg.method_fillna == '-999':
+        if cfg.feature_engineering.method_fillna == '-999':
             predict_fillna_999(models, features, cfg.target, OUT_DIR)
-        elif cfg.method_fillna == 'forward':
+        elif cfg.feature_engineering.method_fillna == 'forward':
             predict_fillna_forward(models, features, cfg.target, OUT_DIR)
         else:
-            raise ValueError(f'Invalid method_fillna: {cfg.method_fillna}')
+            raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,39 @@
+mlflow:
+  experiment:
+    name: ex005_tr_xgb
+    tags: 
+      exec: dev  # dev, test, prd
+
+EXNO: '005'
+
+option:
+  train: true
+  predict: true
+
+target: action
+
+feature_engineering:
+  method_fillna: '-999'  # -999, forward
+
+cv:
+  name: nocv
+  param:
+    n_splits: 1
+
+model:
+  name: XGBClassifier
+  param:
+    n_estimators: 2
+    max_depth: 2
+    learning_rate: 0.05
+    subsample: 0.9
+    colsample_bytree: 0.7
+    missing: -999
+    random_state: 2020
+    # tree_method: gpu_hist
+
+feature:
+  raw:
+    path: 002/train.pkl
+    feature:
+      - feature_0
