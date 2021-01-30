@@ -11,7 +11,7 @@ import shutil
 import pprint
 import warnings
 from sklearn.metrics import roc_auc_score
-from src.util.get_environment import get_exec_env, get_datadir, is_gpu
+from src.util.get_environment import get_exec_env, get_datadir, is_gpu, is_ipykernel
 from src.util.fast_fillna import fast_fillna
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 from src.util.calc_utility_score import utility_score_pd
@@ -145,7 +145,8 @@ def main(cfg) -> None:
     mlflow.set_experiment(cfg.mlflow.experiment.name)
     mlflow.start_run()
     mlflow.set_tags(cfg.mlflow.experiment.tags)
-    mlflow.log_artifacts('.hydra/')
+    if not is_ipykernel():
+        mlflow.log_artifacts('.hydra/')
 
     mlflow.log_param('feature_engineering', cfg.feature_engineering)
     mlflow.log_param('cv.name', cfg.cv.name)
