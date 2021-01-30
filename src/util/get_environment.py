@@ -113,6 +113,10 @@ def get_original_cwd() -> str:
 
 
 def get_datadir() -> str:
+    '''
+    Returns absolute path to data store dir
+    TODO: Add config for colab
+    '''
     env = get_exec_env()
     if env in ['kaggle-Interactive', 'kaggle-Batch']:
         return '/kaggle/working/data'
