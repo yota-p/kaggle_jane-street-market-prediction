@@ -10,10 +10,8 @@ option:
   train: true
   predict: true
 
-target: action
-
 feature_engineering:
-  method_fillna: '-forward'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
 
 cv:
   name: nocv
@@ -32,10 +30,15 @@ model:
     random_state: 2020
     tree_method: gpu_hist
 
-feature:
-  raw:
+target:
+  path: 002/train.pkl
+  col:
+    - action
+
+features:
+  - name: raw
     path: 002/train.pkl
-    feature:
+    cols:
       - feature_0
       - feature_1
       - feature_2
