@@ -20,7 +20,9 @@ class TestEx002:
                               'i16': np.array([-32767, 0, 32766]).astype('int32'),
                               'i32': np.array([-2147483647, 0, 2147483646]).astype('int64'),
                               'f16': np.array([-65400, 0, 65400]).astype('float32'),
-                              'f32': np.array([-3.4028100e+38, 0, 3.4028100e+38]).astype('float64')})
+                              'f32': np.array([-3.4028100e+38, 0, 3.4028100e+38]).astype('float64'),
+                              'weight': np.array([-1, 0, 1]).astype('int16'),
+                             'resp': np.array([-1.1, 0.0, 1.1]).astype('float16')})
         df_in.to_csv(f'{IN_DIR}/train.csv')
 
         pklfiles = ['example_sample_submission', 'example_test', 'features']
@@ -51,16 +53,25 @@ class TestEx002:
         Path(IN_DIR).mkdir(exist_ok=True)
         Path(OUT_DIR).mkdir(exist_ok=True)
 
+        data = pd.DataFrame({'line': np.array([1, 2, 3]).astype('int32'),
+                             'weight': np.array([-1, 0, 1]).astype('int32'),
+                             'resp': np.array([-1.1, 0.0, 1.1]).astype('float32')})
         # create input
-        pklfiles = ['train', 'example_sample_submission', 'example_test', 'features']
-        for file in pklfiles:
-            data = pd.DataFrame({'filename': [file]})
-            data.to_csv(f'{IN_DIR}/{file}.csv')
+        for file in ['train', 'example_sample_submission', 'example_test', 'features']:
+            data.to_csv(f'{IN_DIR}/{file}.csv', index=False)
 
         # call target
         mocker.patch('src.ex002_fe_pickle_reduce.get_datadir', return_value=DATA_DIR)
         ex002_fe_pickle_reduce.main()
 
         # assert csv-> pickled files
-        for file in pklfiles:
+        for file in ['train', 'example_sample_submission', 'example_test', 'features']:
             assert(os.path.exists(f'{OUT_DIR}/{file}.pkl'))
+
+        # assert train
+        df_actual = pd.read_pickle(f'{OUT_DIR}/train.pkl')
+        df_expected = pd.DataFrame({'line': np.array([3]).astype('int32'),
+                                    'weight': np.array([1]).astype('int32'),
+                                    'resp': np.array([1.1]).astype('float32'),
+                                    'action': np.array([1]).astype('int32')})
+        assert df_actual.equals(df_expected)
