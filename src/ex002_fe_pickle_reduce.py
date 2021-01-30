@@ -13,6 +13,8 @@ def main():
     Function:
     - Reduce size of train.csv from 2.5GB to 600MB (On memory)
       Note: Files except train.csv aren't reduced (small enough)
+    - Cut weight <=0
+    - Calculate action
     Output:
     - train.pkl
     - example_sample_submission.pkl
@@ -35,6 +37,11 @@ def main():
     dfnew = reduce_mem_usage(df)
     dfnew.memory_usage(deep=True)
     print(df.info())  # The dataframe size has decreased to 630MB (75% less).
+
+    # cut weight <= 0
+    dfnew = dfnew.query('weight > 0').reset_index(drop=True)
+    # add target column
+    dfnew['action'] = (dfnew['resp'] > 0).astype('int32')
 
     # Save reduced data
     dfnew.dtypes.to_csv(f'{OUT_DIR}/train_dtypes.csv', header=False)

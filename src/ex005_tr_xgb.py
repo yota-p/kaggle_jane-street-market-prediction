@@ -151,7 +151,7 @@ def main(cfg) -> None:
     mlflow.log_param('cv.name', cfg.cv.name)
     mlflow.log_params(cfg.cv.param)
     mlflow.log_params(cfg.model.param)
-    mlflow.log_param('feature', cfg.feature)
+    mlflow.log_param('feature', cfg.features)
 
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
@@ -159,18 +159,21 @@ def main(cfg) -> None:
         assert cfg.model.param.tree_method == 'gpu_hist'
 
     # FE
-    features = []
     train = pd.DataFrame()
-    for fname, fparam in cfg.feature.items():
-        cols = fparam.feature
-        df = pd.read_pickle(f'{DATA_DIR}/{fparam.path}')
-        print(f'Feature: {fname}, shape: {df.shape}')
-        train = pd.concat([train, df], axis=1)
-        features += cols
-    print(f'Input train shape: {train.shape}')
 
-    train = train.query('weight > 0').reset_index(drop=True)
-    train[cfg.target] = (train['resp'] > 0).astype('int')
+    # load feature
+    features = []
+    for f in cfg.features:
+        df = pd.read_pickle(f'{DATA_DIR}/{f.path}').loc[:, f.cols]
+        train = pd.concat([train, df], axis=1)
+        features += f.cols
+        print(f'Feature: {f.name}, shape: {df.shape}')
+
+    # load target
+    df = pd.read_pickle(f'{DATA_DIR}/{cfg.target.path}').loc[:, cfg.target.col]
+    train = pd.concat([train, df], axis=1)
+
+    print(f'Input train shape: {train.shape}')
 
     # Fill missing values
     if cfg.feature_engineering.method_fillna == '-999':
@@ -181,9 +184,9 @@ def main(cfg) -> None:
     # Train
     if cfg.option.train:
         if cfg.cv.name == 'nocv':
-            train_xgb(train, features, cfg.target, cfg.model.param, OUT_DIR)
+            train_xgb(train, features, cfg.target.col, cfg.model.param, OUT_DIR)
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
-            train_xgb_cv(train, features, cfg.target, cfg.model.param, cfg.cv.param, OUT_DIR)
+            train_xgb_cv(train, features, cfg.target.col, cfg.model.param, cfg.cv.param, OUT_DIR)
         else:
             raise ValueError(f'Invalid cv: {cfg.cv}')
 
@@ -195,9 +198,9 @@ def main(cfg) -> None:
             models.append(model)
 
         if cfg.feature_engineering.method_fillna == '-999':
-            predict_fillna_999(models, features, cfg.target, OUT_DIR)
+            predict_fillna_999(models, features, cfg.target.col, OUT_DIR)
         elif cfg.feature_engineering.method_fillna == 'forward':
-            predict_fillna_forward(models, features, cfg.target, OUT_DIR)
+            predict_fillna_forward(models, features, cfg.target.col, OUT_DIR)
         else:
             raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
 
