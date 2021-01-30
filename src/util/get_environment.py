@@ -1,6 +1,7 @@
 import os
 import sys
 import torch
+import hydra
 from argparse import ArgumentParser
 
 
@@ -92,6 +93,25 @@ def is_ipykernel() -> bool:
         return False
 
 
+def get_original_cwd() -> str:
+    '''
+    Returns original working directory for execution.
+    In CLI, hydra changes cwd to outputs/xxx.
+    In Jupyter Notebook, hydra doesn't change cwd.
+    This is due to that you need to initialize & compose hydra config using compose API in Jupyter.
+    Under compose API, hydra.core.hydra_config.HydraConfig is not initialized.
+    Thus, in Jupyter Notebook, you need to avoid calling hydra.utils.get_original_cwd().
+    Refer:
+    https://github.com/facebookresearch/hydra/issues/828
+    https://github.com/facebookresearch/hydra/blob/master/hydra/core/hydra_config.py
+    https://github.com/facebookresearch/hydra/blob/master/hydra/utils.py
+    '''
+    if hydra.core.hydra_config.HydraConfig.initialized():
+        return hydra.utils.get_original_cwd()
+    else:
+        return os.getcwd()
+
+
 def get_datadir() -> str:
     env = get_exec_env()
     if env in ['kaggle-Interactive', 'kaggle-Batch']:
@@ -99,7 +119,7 @@ def get_datadir() -> str:
     elif env == 'colab':
         return None
     elif env == 'local':
-        return './data'
+        return get_original_cwd() + '/data'
     else:
         raise ValueError
 
