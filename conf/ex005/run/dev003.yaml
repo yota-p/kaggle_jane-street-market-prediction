@@ -1,6 +1,6 @@
 mlflow:
   experiment:
-    name: ex005_tr_xgb
+    name: ex005_train
     tags: 
       exec: dev  # dev, test, prd
 
