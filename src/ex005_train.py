@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import xgboost as xgb
+import lightgbm as lgb
 import mlflow
 import hydra
 import pickle
@@ -91,12 +92,29 @@ def predict_fillna_999(models: List[Any], features: List[str], target: str, OUT_
     return None
 
 
-def train_xgb(train: pd.DataFrame, features: List[str], target: str, model_param: Dict, OUT_DIR: str) -> None:
+def get_model(model_name: str, model_param: Dict) -> Any:
+    if model_name == 'XGBClassifier':
+        return xgb.XGBClassifier(**model_param)
+    elif model_name == 'LGBMClassifier':
+        return lgb.LGBMClassifier(**model_param)
+    else:
+        raise ValueError(f'Invalid model_name: {model_name}')
+
+
+def train_gbdt(
+        train: pd.DataFrame,
+        features: List[str],
+        target: str,
+        model_name: str,
+        model_param: Dict,
+        OUT_DIR: str
+        ) -> None:
+
     print('Start training')
 
     X_train = train.loc[:, features].values
     y_train = train.loc[:, target].values
-    model = xgb.XGBClassifier(**model_param)
+    model = get_model(model_name, model_param)
     model.fit(X_train, y_train)
 
     file = f'{OUT_DIR}/model_0.pkl'
@@ -107,14 +125,23 @@ def train_xgb(train: pd.DataFrame, features: List[str], target: str, model_param
     return None
 
 
-def train_xgb_cv(train: pd.DataFrame, features: List[str], target: str, model_param: Dict, cv_param: Dict, OUT_DIR: str) -> None:
+def train_gbdt_cv(
+        train: pd.DataFrame,
+        features: List[str],
+        target: str,
+        model_name: str,
+        model_param: Dict,
+        cv_param: Dict,
+        OUT_DIR: str
+        ) -> None:
+
     kf = PurgedGroupTimeSeriesSplit(**cv_param)
     scores = []
     for fold, (tr, te) in enumerate(kf.split(train.loc[target].values, train[target].values, train['date'].values)):
         pprint.pprint(f'Starting Fold {fold}:')
         X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
         y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
-        model = xgb.XGBClassifier(**model_param)
+        model = get_model(model_name, model_param)
         model.fit(X_tr, y_tr,
                   eval_metric='logloss',
                   eval_set=[(X_tr, y_tr), (X_val, y_val)])
@@ -194,9 +221,9 @@ def main(cfg: DictConfig) -> None:
     # Train
     if cfg.option.train:
         if cfg.cv.name == 'nocv':
-            train_xgb(train, features, cfg.target.col, cfg.model.param, OUT_DIR)
+            train_gbdt(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
-            train_xgb_cv(train, features, cfg.target.col, cfg.model.param, cfg.cv.param, OUT_DIR)
+            train_gbdt_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
         else:
             raise ValueError(f'Invalid cv: {cfg.cv}')
 
