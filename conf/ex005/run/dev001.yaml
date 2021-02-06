@@ -32,8 +32,7 @@ model:
 
 target:
   path: 002/train.pkl
-  col:
-    - action
+  col: action
 
 features:
   - name: raw

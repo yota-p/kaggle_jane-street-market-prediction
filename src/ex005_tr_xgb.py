@@ -10,6 +10,8 @@ import pickle
 import shutil
 import pprint
 import warnings
+from typing import List, Tuple, Dict, Any
+from omegaconf.dictconfig import DictConfig
 from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_exec_env, get_datadir, is_gpu, is_ipykernel
 from src.util.fast_fillna import fast_fillna
@@ -18,7 +20,7 @@ from src.util.calc_utility_score import utility_score_pd
 warnings.filterwarnings("ignore")
 
 
-def create_janeapi() -> (object, object):
+def create_janeapi() -> Tuple[Any, Any]:
     DATA_DIR = get_datadir()
     if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
         sys.path.append(f'{DATA_DIR}/001')
@@ -28,7 +30,7 @@ def create_janeapi() -> (object, object):
     return env, iter_test
 
 
-def predict_fillna_forward(models: list, features: list, target: str, OUT_DIR: str) -> None:
+def predict_fillna_forward(models: List[Any], features: List[str], target: str, OUT_DIR: str) -> None:
     '''
     Using high-performance nan forward-filling logic by Yirun Zhang
     Note: Be aware of the performance in the 'for' loop!
@@ -44,7 +46,7 @@ def predict_fillna_forward(models: list, features: list, target: str, OUT_DIR: s
         x_tt = test_df.loc[:, features].values  # this is (1,130) ndarray([[values...]])
         x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
         tmp = x_tt[0, :]  # save last seen values to tmp
-        y_pred = 0.
+        y_pred: np.ndarray = 0.
         for model in models:
             y_pred += model.predict(x_tt) / len(models)
         y_pred = y_pred > 0
@@ -60,7 +62,7 @@ def predict_fillna_forward(models: list, features: list, target: str, OUT_DIR: s
     shutil.move('submission.csv', f'{OUT_DIR}/submission.csv')
 
 
-def predict_fillna_999(models: list, features: list, target: str, OUT_DIR: str) -> None:
+def predict_fillna_999(models: List[Any], features: List[str], target: str, OUT_DIR: str) -> None:
     env, iter_test = create_janeapi()
 
     print('Start predicting')
@@ -69,7 +71,7 @@ def predict_fillna_999(models: list, features: list, target: str, OUT_DIR: str) 
         X_test = test_df.loc[:, features]
         X_test.fillna(-999)
 
-        y_pred = 0.
+        y_pred: np.ndarray = 0.
         for model in models:
             y_pred += model.predict(X_test.values) / len(models)
         y_pred = y_pred > 0
@@ -86,8 +88,10 @@ def predict_fillna_999(models: list, features: list, target: str, OUT_DIR: str) 
     shutil.move('submission.csv', file)
     mlflow.log_artifact(file)
 
+    return None
 
-def train_xgb(train: pd.DataFrame, features: list, target: str, model_param: dict, OUT_DIR: str) -> None:
+
+def train_xgb(train: pd.DataFrame, features: List[str], target: str, model_param: Dict, OUT_DIR: str) -> None:
     print('Start training')
 
     X_train = train.loc[:, features].values
@@ -100,12 +104,14 @@ def train_xgb(train: pd.DataFrame, features: list, target: str, model_param: dic
     mlflow.log_artifact(file)
     print('End training')
 
+    return None
 
-def train_xgb_cv(train: pd.DataFrame, features: list, target: str, model_param: dict, cv_param: dict, OUT_DIR: str) -> None:
+
+def train_xgb_cv(train: pd.DataFrame, features: List[str], target: str, model_param: Dict, cv_param: Dict, OUT_DIR: str) -> None:
     kf = PurgedGroupTimeSeriesSplit(**cv_param)
     scores = []
     for fold, (tr, te) in enumerate(kf.split(train.loc[target].values, train[target].values, train['date'].values)):
-        pprint(f'Starting Fold {fold}:')
+        pprint.pprint(f'Starting Fold {fold}:')
         X_tr, X_val = train.loc[tr, features].values, train.loc[te, features].values
         y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
         model = xgb.XGBClassifier(**model_param)
@@ -133,9 +139,12 @@ def train_xgb_cv(train: pd.DataFrame, features: list, target: str, model_param: 
         mlflow.log_artifact(file)
         del model, val_pred, X_tr, X_val, y_tr, y_val, date, weight, resp, action, utility_val, utility_pred
 
+        return None
+
 
 @hydra.main(config_path="../conf/ex005", config_name="config")
-def main(cfg) -> None:
+def main(cfg: DictConfig) -> None:
+    print(type(cfg))
     print(cfg)
     DATA_DIR = get_datadir()
 
@@ -204,6 +213,8 @@ def main(cfg) -> None:
             predict_fillna_forward(models, features, cfg.target.col, OUT_DIR)
         else:
             raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
+
+    return None
 
 
 if __name__ == '__main__':
