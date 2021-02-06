@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
+import catboost
 import mlflow
 import hydra
 import pickle
@@ -97,11 +98,13 @@ def get_model(model_name: str, model_param: Dict) -> Any:
         return xgb.XGBClassifier(**model_param)
     elif model_name == 'LGBMClassifier':
         return lgb.LGBMClassifier(**model_param)
+    elif model_name == 'CatBoostClassifier':
+        return catboost.CatBoostClassifier(**model_param)
     else:
         raise ValueError(f'Invalid model_name: {model_name}')
 
 
-def train_gbdt(
+def train_full(
         train: pd.DataFrame,
         features: List[str],
         target: str,
@@ -125,7 +128,7 @@ def train_gbdt(
     return None
 
 
-def train_gbdt_cv(
+def train_cv(
         train: pd.DataFrame,
         features: List[str],
         target: str,
@@ -221,9 +224,9 @@ def main(cfg: DictConfig) -> None:
     # Train
     if cfg.option.train:
         if cfg.cv.name == 'nocv':
-            train_gbdt(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
+            train_full(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
-            train_gbdt_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
+            train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
         else:
             raise ValueError(f'Invalid cv: {cfg.cv}')
 
