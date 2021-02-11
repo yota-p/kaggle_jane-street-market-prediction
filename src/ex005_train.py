@@ -5,13 +5,14 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import lightgbm as lgb
+import catboost
 import mlflow
 import hydra
 import pickle
 import shutil
 import pprint
 import warnings
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Any
 from omegaconf.dictconfig import DictConfig
 from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_exec_env, get_datadir, is_gpu, is_ipykernel
@@ -92,21 +93,25 @@ def predict_fillna_999(models: List[Any], features: List[str], target: str, OUT_
     return None
 
 
-def get_model(model_name: str, model_param: Dict) -> Any:
+def get_model(model_name: str, model_param: DictConfig) -> Any:
     if model_name == 'XGBClassifier':
+        if is_gpu():  # check if you're utilizing gpu if present
+            assert model_param.tree_method == 'gpu_hist'
         return xgb.XGBClassifier(**model_param)
     elif model_name == 'LGBMClassifier':
         return lgb.LGBMClassifier(**model_param)
+    elif model_name == 'CatBoostClassifier':
+        return catboost.CatBoostClassifier(**model_param)
     else:
         raise ValueError(f'Invalid model_name: {model_name}')
 
 
-def train_gbdt(
+def train_full(
         train: pd.DataFrame,
         features: List[str],
         target: str,
         model_name: str,
-        model_param: Dict,
+        model_param: DictConfig,
         OUT_DIR: str
         ) -> None:
 
@@ -125,13 +130,13 @@ def train_gbdt(
     return None
 
 
-def train_gbdt_cv(
+def train_cv(
         train: pd.DataFrame,
         features: List[str],
         target: str,
         model_name: str,
-        model_param: Dict,
-        cv_param: Dict,
+        model_param: DictConfig,
+        cv_param: DictConfig,
         OUT_DIR: str
         ) -> None:
 
@@ -192,8 +197,6 @@ def main(cfg: DictConfig) -> None:
 
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
     Path(OUT_DIR).mkdir(exist_ok=True)
-    if is_gpu():  # check if you're utilizing gpu if present
-        assert cfg.model.param.tree_method == 'gpu_hist'
 
     # FE
     train = pd.DataFrame()
@@ -221,9 +224,9 @@ def main(cfg: DictConfig) -> None:
     # Train
     if cfg.option.train:
         if cfg.cv.name == 'nocv':
-            train_gbdt(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
+            train_full(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
-            train_gbdt_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
+            train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
         else:
             raise ValueError(f'Invalid cv: {cfg.cv}')
 
