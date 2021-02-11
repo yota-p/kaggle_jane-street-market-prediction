@@ -2,7 +2,7 @@ mlflow:
   experiment:
     name: ex005_train
     tags: 
-      exec: dev  # dev, test, prd
+      exec: stg  # dev, test, prd
 
 EXNO: '005'
 
@@ -11,7 +11,7 @@ option:
   predict: true
 
 feature_engineering:
-  method_fillna: '-999'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
 
 cv:
   name: 'PurgedGroupTimeSeriesSplit'
@@ -24,8 +24,8 @@ cv:
 model:
   name: XGBClassifier
   param:
-    n_estimators: 2
-    max_depth: 2
+    n_estimators: 300
+    max_depth: 7
     learning_rate: 0.05
     subsample: 0.9
     colsample_bytree: 0.7
