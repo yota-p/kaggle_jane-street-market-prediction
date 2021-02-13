@@ -27,7 +27,6 @@ model:
     loss_function: Logloss
     eval_metric: AUC
   train_param:
-    eval_metric: logloss
     early_stopping_rounds: 30
 
 target:
