@@ -114,6 +114,7 @@ def train_full(
         target: str,
         model_name: str,
         model_param: DictConfig,
+        train_param: DictConfig,
         OUT_DIR: str
         ) -> None:
 
@@ -122,7 +123,7 @@ def train_full(
     X_train = train.loc[:, features].values
     y_train = train.loc[:, target].values
     model = get_model(model_name, model_param)
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, **train_param)
 
     file = f'{OUT_DIR}/model_0.pkl'
     pickle.dump(model, open(file, 'wb'))
@@ -138,6 +139,7 @@ def train_cv(
         target: str,
         model_name: str,
         model_param: DictConfig,
+        train_param: DictConfig,
         cv_param: DictConfig,
         OUT_DIR: str
         ) -> None:
@@ -150,8 +152,8 @@ def train_cv(
         y_tr, y_val = train.loc[tr, target].values, train.loc[te, target].values
         model = get_model(model_name, model_param)
         model.fit(X_tr, y_tr,
-                  eval_metric='logloss',
-                  eval_set=[(X_tr, y_tr), (X_val, y_val)])
+                  eval_set=[(X_tr, y_tr), (X_val, y_val)],
+                  **train_param)
         val_pred = model.predict(X_val)
         auc = roc_auc_score(y_val, val_pred)
 
@@ -178,7 +180,7 @@ def train_cv(
 
 @hydra.main(config_path="../conf/ex005", config_name="config")
 def main(cfg: DictConfig) -> None:
-    pprint.pprint(cfg)
+    pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
 
     # follow these sequences: uri > experiment > run > others
@@ -193,7 +195,8 @@ def main(cfg: DictConfig) -> None:
     mlflow.log_param('feature_engineering', cfg.feature_engineering)
     mlflow.log_param('cv.name', cfg.cv.name)
     mlflow.log_params(cfg.cv.param)
-    mlflow.log_params(cfg.model.param)
+    mlflow.log_params(cfg.model.model_param)
+    mlflow.log_params(cfg.model.train_param)
     mlflow.log_param('feature', cfg.features)
 
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
@@ -229,9 +232,9 @@ def main(cfg: DictConfig) -> None:
     # Train
     if cfg.option.train:
         if cfg.cv.name == 'nocv':
-            train_full(train, features, cfg.target.col, cfg.model.name, cfg.model.param, OUT_DIR)
+            train_full(train, features, cfg.target.col, cfg.model.name, cfg.model.model_param, cfg.model.train_param, OUT_DIR)
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
-            train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.param, cfg.cv.param, OUT_DIR)
+            train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.model_param, cfg.model.train_param, cfg.cv.param, OUT_DIR)
         else:
             raise ValueError(f'Invalid cv: {cfg.cv}')
 

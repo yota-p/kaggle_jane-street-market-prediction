@@ -2,7 +2,7 @@ mlflow:
   experiment:
     name: ex005_train
     tags: 
-      exec: dev  # dev, test, prd
+      exec: prd  # dev, test, prd
 
 EXNO: '005'
 
@@ -11,16 +11,19 @@ option:
   predict: true
 
 feature_engineering:
-  method_fillna: '-999'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
 
 cv:
-  name: nocv
+  name: 'PurgedGroupTimeSeriesSplit'
   param:
-    n_splits: 1
+    n_splits: 3
+    max_train_group_size: 150
+    group_gap: 20
+    max_test_group_size: 60
 
 model:
   name: LGBMClassifier
-  param:
+  model_param:
     boosting_type: gbdt
     num_leaves: 31
     max_depth: -1
@@ -41,10 +44,25 @@ model:
     n_jobs: -1
     silent: True
     importance_type: split
+  train_param:
+    eval_metric: logloss
+    early_stopping_rounds: 30
 
 target:
   path: 002/train.pkl
   col: action
+
+info:
+  path: 002/train.pkl
+  cols:
+    - date
+    - weight
+    - resp_1
+    - resp_2
+    - resp_3
+    - resp_4
+    - resp
+    - ts_id
 
 features:
   - name: raw

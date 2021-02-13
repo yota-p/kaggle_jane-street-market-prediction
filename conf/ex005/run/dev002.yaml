@@ -11,19 +11,19 @@ option:
   predict: true
 
 feature_engineering:
-  method_fillna: '-999'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
 
 cv:
   name: 'PurgedGroupTimeSeriesSplit'
   param:
-    n_splits: 4
+    n_splits: 3
     max_train_group_size: 150
     group_gap: 20
     max_test_group_size: 60
 
 model:
   name: XGBClassifier
-  param:
+  model_param:
     n_estimators: 2
     max_depth: 2
     learning_rate: 0.05
@@ -32,6 +32,9 @@ model:
     missing: -999
     random_state: 2020
     # tree_method: gpu_hist
+  train_param:
+    eval_metric: logloss
+    early_stopping_rounds: 30
 
 target:
   path: 002/train.pkl
