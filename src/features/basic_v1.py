@@ -22,11 +22,11 @@ def main():
     - features.pkl
     - train_dtypes.csv
     '''
-    EXNO = '002'
+    DATASET = 'basic_v1'
     DATA_DIR = get_datadir()
-    IN_DIR = f'{DATA_DIR}/001'
-    OUT_DIR = f'{DATA_DIR}/{EXNO}'
-    Path(OUT_DIR).mkdir(exist_ok=True)
+    IN_DIR = f'{DATA_DIR}/raw'
+    OUT_DIR = f'{DATA_DIR}/processed/{DATASET}'
+    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     if os.path.exists(f'{OUT_DIR}/train.pkl'):
         print(f'Output exists. Skip processing: {OUT_DIR}/train.pkl')
@@ -36,10 +36,8 @@ def main():
     print(df.info())  # Size of the dataframe is about 2.5 GB
     dfnew = reduce_mem_usage(df)
     dfnew.memory_usage(deep=True)
-    print(df.info())  # The dataframe size has decreased to 630MB (75% less).
+    print(dfnew.info())  # The dataframe size has decreased to 1.2GB (50% less).
 
-    # cut weight <= 0
-    dfnew = dfnew.query('weight > 0').reset_index(drop=True)
     # add target column
     dfnew['action'] = (dfnew['resp'] > 0).astype('int32')
 

@@ -211,7 +211,7 @@ def main(cfg: DictConfig) -> None:
     mlflow.log_param('feature', cfg.features)
 
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
-    Path(OUT_DIR).mkdir(exist_ok=True)
+    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     # FE
     train = pd.DataFrame()
@@ -233,6 +233,9 @@ def main(cfg: DictConfig) -> None:
     train = pd.concat([train, df], axis=1)
 
     print(f'Input train shape: {train.shape}')
+
+    # cut weight <= 0
+    df = df.query('weight > 0').reset_index(drop=True)
 
     # Fill missing values
     if cfg.feature_engineering.method_fillna == '-999':

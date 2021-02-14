@@ -12,7 +12,7 @@ def main():
     DATA_DIR = get_datadir()
     ENV = get_exec_env()
     OUT_DIR = f'{DATA_DIR}/raw'
-    Path(OUT_DIR).mkdir(exist_ok=True)
+    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     if ENV in ['kaggle-Interactive', 'kaggle-Batch']:
         for f in glob.glob(f'{DATA_DIR}/../../input/jane-street-market-prediction/*.csv'):
