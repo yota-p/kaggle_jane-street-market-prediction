@@ -154,15 +154,19 @@ def train_cv(
         model.fit(X_tr, y_tr,
                   eval_set=[(X_tr, y_tr), (X_val, y_val)],
                   **train_param)
-        val_pred = model.predict(X_val)
-        auc = roc_auc_score(y_val, val_pred)
 
-        date = train.loc[te, 'date'].values
-        weight = train.loc[te, 'weight'].values
-        resp = train.loc[te, 'resp'].values
-        action = train.loc[te, 'action'].values
-        utility_tr = utility_score_pd(date, weight, resp, action)
-        utility_val = utility_score_pd(date, weight, resp, val_pred)
+        pred_tr, pred_val = model.predict(X_tr), model.predict(X_val)
+        auc = roc_auc_score(y_val, pred_val)
+        utility_tr = utility_score_pd(
+                        train.loc[tr, 'date'].values,
+                        train.loc[tr, 'weight'].values,
+                        train.loc[tr, 'resp'].values,
+                        pred_tr)
+        utility_val = utility_score_pd(
+                        train.loc[te, 'date'].values,
+                        train.loc[te, 'weight'].values,
+                        train.loc[te, 'resp'].values,
+                        pred_val)
 
         score = {'fold': fold, 'auc': auc, 'utility_tr': utility_tr, 'utility_val': utility_val}
 
@@ -173,7 +177,7 @@ def train_cv(
         file = f'{OUT_DIR}/model_{fold}.pkl'
         pickle.dump(model, open(file, 'wb'))
         mlflow.log_artifact(file)
-        del model, val_pred, X_tr, X_val, y_tr, y_val, date, weight, resp, action
+        del model, X_tr, X_val, y_tr, y_val
 
     return None
 
@@ -193,10 +197,11 @@ def main(cfg: DictConfig) -> None:
         mlflow.log_artifacts('.hydra/')
 
     mlflow.log_param('feature_engineering', cfg.feature_engineering)
-    mlflow.log_param('cv.name', cfg.cv.name)
-    mlflow.log_params(cfg.cv.param)
+    mlflow.log_param('model.name', cfg.model.name)
     mlflow.log_params(cfg.model.model_param)
     mlflow.log_params(cfg.model.train_param)
+    mlflow.log_param('cv.name', cfg.cv.name)
+    mlflow.log_params(cfg.cv.param)
     mlflow.log_param('feature', cfg.features)
 
     OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
