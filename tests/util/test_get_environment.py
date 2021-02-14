@@ -14,7 +14,7 @@ class TestGetDataDir:
 
     def test_colab(self, mocker):
         mocker.patch('src.util.get_environment.get_exec_env', return_value='colab')
-        assert(get_datadir() is None)
+        assert(get_datadir() == '')
 
     def test_local(self, mocker):
         mocker.patch('src.util.get_environment.get_exec_env', return_value='local')

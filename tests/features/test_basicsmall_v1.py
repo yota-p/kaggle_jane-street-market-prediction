@@ -2,17 +2,17 @@ import pandas as pd
 import numpy as np
 import hashlib
 from pathlib import Path
-from src import ex003_fe_pickle_small
+from src.features import basicsmall_v1
 
 
-class TestEx003:
-    def test_ex003(self, mocker, tmpdir):
-        EXNO = '003'
+class TestBasicSmallV1:
+    def test_create_data(self, mocker, tmpdir):
+        DATASET = 'basicsmall_v1'
         DATA_DIR = str(tmpdir)
-        IN_DIR = f'{DATA_DIR}/002'
-        OUT_DIR = f'{DATA_DIR}/{EXNO}'
-        Path(IN_DIR).mkdir(exist_ok=True)
-        Path(OUT_DIR).mkdir(exist_ok=True)
+        IN_DIR = f'{DATA_DIR}/processed/basic_v1'
+        OUT_DIR = f'{DATA_DIR}/processed/{DATASET}'
+        Path(IN_DIR).mkdir(exist_ok=True, parents=True)
+        Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
         # create input
         df_in = pd.DataFrame({'key': [1, 2, 3, 4], 'date': [np.int16(0), np.int16(10), np.int16(100), np.int16(101)]})
@@ -24,8 +24,8 @@ class TestEx003:
             data.to_pickle(f'{IN_DIR}/{file}')
 
         # call target
-        mocker.patch('src.ex003_fe_pickle_small.get_datadir', return_value=DATA_DIR)
-        ex003_fe_pickle_small.main()
+        mocker.patch('src.features.basicsmall_v1.get_datadir', return_value=DATA_DIR)
+        basicsmall_v1.main()
 
         # assert
         df_actual = pd.read_pickle(f'{OUT_DIR}/train.pkl')

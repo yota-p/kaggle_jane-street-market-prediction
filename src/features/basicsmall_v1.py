@@ -22,11 +22,11 @@ def main():
     - example_test.pkl
     - features.pkl
     '''
-    EXNO = '003'
+    DATASET = 'basicsmall_v1'
     DATA_DIR = get_datadir()
-    IN_DIR = f'{DATA_DIR}/002'
-    OUT_DIR = f'{DATA_DIR}/{EXNO}'
-    Path(OUT_DIR).mkdir(exist_ok=True)
+    IN_DIR = f'{DATA_DIR}/processed/basic_v1'
+    OUT_DIR = f'{DATA_DIR}/processed/{DATASET}'
+    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
     print(DATA_DIR)
 
     df = pd.read_pickle(f'{IN_DIR}/train.pkl')

@@ -1,10 +1,10 @@
 mlflow:
   experiment:
-    name: ex005_train
+    name: train_v1
     tags: 
       exec: prd  # dev, test, prd
 
-EXNO: '005'
+out_dir: train_v1/prd001
 
 option:
   train: true
@@ -34,11 +34,11 @@ model:
     early_stopping_rounds: null
 
 target:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   col: action
 
 info:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   cols:
     - date
     - weight
@@ -51,7 +51,7 @@ info:
 
 features:
   - name: raw
-    path: 002/train.pkl
+    path: processed/basic_v1/train.pkl
     cols:
       - feature_0
       - feature_1
