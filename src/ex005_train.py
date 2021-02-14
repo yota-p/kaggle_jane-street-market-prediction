@@ -18,7 +18,7 @@ from sklearn.metrics import roc_auc_score
 from src.util.get_environment import get_exec_env, get_datadir, is_gpu, is_ipykernel
 from src.util.fast_fillna import fast_fillna
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
-from src.util.calc_utility_score import utility_score_pd
+from src.util.calc_utility_score import utility_score_pd_scaled
 warnings.filterwarnings("ignore")
 
 
@@ -157,12 +157,12 @@ def train_cv(
 
         pred_tr, pred_val = model.predict(X_tr), model.predict(X_val)
         auc = roc_auc_score(y_val, pred_val)
-        utility_tr = utility_score_pd(
+        utility_tr = utility_score_pd_scaled(
                         train.loc[tr, 'date'].values,
                         train.loc[tr, 'weight'].values,
                         train.loc[tr, 'resp'].values,
                         pred_tr)
-        utility_val = utility_score_pd(
+        utility_val = utility_score_pd_scaled(
                         train.loc[te, 'date'].values,
                         train.loc[te, 'weight'].values,
                         train.loc[te, 'resp'].values,
