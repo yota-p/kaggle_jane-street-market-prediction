@@ -1,10 +1,10 @@
 mlflow:
   experiment:
-    name: ex005_train
+    name: train_v1
     tags: 
-      exec: dev  # dev, test, prd
+      exec: prd  # dev, test, prd
 
-EXNO: '005'
+out_dir: train_v1/prd004
 
 option:
   train: true
@@ -16,32 +16,25 @@ feature_engineering:
 cv:
   name: 'PurgedGroupTimeSeriesSplit'
   param:
-    n_splits: 3
+    n_splits: 5
     max_train_group_size: 150
     group_gap: 20
     max_test_group_size: 60
 
 model:
-  name: XGBClassifier
+  name: CatBoostClassifier
   model_param:
-    n_estimators: 2
-    max_depth: 2
-    learning_rate: 0.05
-    subsample: 0.9
-    colsample_bytree: 0.7
-    missing: -999
-    random_state: 2020
-    # tree_method: gpu_hist
+    loss_function: Logloss
+    eval_metric: AUC
   train_param:
-    eval_metric: logloss
     early_stopping_rounds: 30
 
 target:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   col: action
 
 info:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   cols:
     - date
     - weight
@@ -54,7 +47,7 @@ info:
 
 features:
   - name: raw
-    path: 002/train.pkl
+    path: processed/basic_v1/train.pkl
     cols:
       - feature_0
       - feature_1

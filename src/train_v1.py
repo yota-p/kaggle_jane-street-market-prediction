@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 def create_janeapi() -> Tuple[Any, Any]:
     DATA_DIR = get_datadir()
     if get_exec_env() not in ['kaggle-Interactive', 'kaggle-Batch']:
-        sys.path.append(f'{DATA_DIR}/001')
+        sys.path.append(f'{DATA_DIR}/raw')
     import janestreet
     env = janestreet.make_env()  # initialize the environment
     iter_test = env.iter_test()  # an iterator which loops over the test set
@@ -188,7 +188,7 @@ def train_cv(
     return None
 
 
-@hydra.main(config_path="../conf/ex005", config_name="config")
+@hydra.main(config_path="../conf/train_v1", config_name="config")
 def main(cfg: DictConfig) -> None:
     pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
@@ -210,7 +210,7 @@ def main(cfg: DictConfig) -> None:
     mlflow.log_params(cfg.cv.param)
     mlflow.log_param('feature', cfg.features)
 
-    OUT_DIR = f'{DATA_DIR}/{cfg.EXNO}'
+    OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
     Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     # FE
@@ -235,7 +235,7 @@ def main(cfg: DictConfig) -> None:
     print(f'Input train shape: {train.shape}')
 
     # cut weight <= 0
-    df = df.query('weight > 0').reset_index(drop=True)
+    train = train.query('weight > 0').reset_index(drop=True)
 
     # Fill missing values
     if cfg.feature_engineering.method_fillna == '-999':

@@ -1,10 +1,10 @@
 mlflow:
   experiment:
-    name: ex005_train
+    name: train_v1
     tags: 
       exec: prd  # dev, test, prd
 
-EXNO: '005'
+out_dir: train_v1/prd003
 
 option:
   train: true
@@ -22,19 +22,38 @@ cv:
     max_test_group_size: 60
 
 model:
-  name: CatBoostClassifier
+  name: LGBMClassifier
   model_param:
-    loss_function: Logloss
-    eval_metric: AUC
+    boosting_type: gbdt
+    num_leaves: 31
+    max_depth: -1
+    learning_rate: 0.1
+    n_estimators: 100
+    subsample_for_bin: 200000
+    objective: null
+    class_weight: null
+    min_split_gain: 0.0
+    min_child_weight: 0.001
+    min_child_samples: 20
+    subsample: 1.0
+    subsample_freq: 0
+    colsample_bytree: 1.0
+    reg_alpha: 0.0
+    reg_lambda: 0.0
+    random_state: null
+    n_jobs: -1
+    silent: True
+    importance_type: split
   train_param:
+    eval_metric: logloss
     early_stopping_rounds: 30
 
 target:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   col: action
 
 info:
-  path: 002/train.pkl
+  path: processed/basic_v1/train.pkl
   cols:
     - date
     - weight
@@ -47,7 +66,7 @@ info:
 
 features:
   - name: raw
-    path: 002/train.pkl
+    path: processed/basic_v1/train.pkl
     cols:
       - feature_0
       - feature_1
