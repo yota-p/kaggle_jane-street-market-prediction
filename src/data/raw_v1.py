@@ -6,10 +6,12 @@ from src.util.get_environment import get_datadir, get_exec_env
 
 
 def main():
-    EXNO = '001'
+    '''
+    Download raw data from kaggle & unzip
+    '''
     DATA_DIR = get_datadir()
     ENV = get_exec_env()
-    OUT_DIR = f'{DATA_DIR}/{EXNO}'
+    OUT_DIR = f'{DATA_DIR}/raw'
     Path(OUT_DIR).mkdir(exist_ok=True)
 
     if ENV in ['kaggle-Interactive', 'kaggle-Batch']:
