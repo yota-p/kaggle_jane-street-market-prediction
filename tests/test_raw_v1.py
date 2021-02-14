@@ -1,20 +1,19 @@
 import pytest
 from pathlib import Path
 import hashlib
-from src import ex001_fe_download_raw
+from src.data import raw_v1
 
 
-class TestEx001:
+class TestRawV1:
     '''
     Note:
     No tests implemented for download & unzip
     '''
     @pytest.mark.parametrize('ENV', ['kaggle-Interactive', 'kaggle-Batch'])
     def test_kaggle(self, mocker, tmpdir, ENV):
-        EXNO = '001'
         DATA_DIR = str(tmpdir) + '/working/data'  # This is equal to /kaggle/working
         IN_DIR = f'{DATA_DIR}/../../input/jane-street-market-prediction'
-        OUT_DIR = f'{DATA_DIR}/{EXNO}'
+        OUT_DIR = f'{DATA_DIR}/raw'
         Path(IN_DIR).mkdir(exist_ok=True, parents=True)
         Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
@@ -30,9 +29,9 @@ class TestEx001:
             f = open(f'{IN_DIR}/{file}', 'w')
             f.write(f'This is {file}')
 
-        mocker.patch('src.ex001_fe_download_raw.get_datadir', return_value=DATA_DIR)
-        mocker.patch('src.ex001_fe_download_raw.get_exec_env', return_value=ENV)
-        ex001_fe_download_raw.main()
+        mocker.patch('src.data.raw_v1.get_datadir', return_value=DATA_DIR)
+        mocker.patch('src.data.raw_v1.get_exec_env', return_value=ENV)
+        raw_v1.main()
 
         # assert copied files
         for file in copyfiles:
@@ -47,15 +46,14 @@ class TestEx001:
             open(f'{OUT_DIR}/{dummyfile}', 'rb')
 
     def test_abnormal(self, mocker, tmpdir):
-        EXNO = '001'
         DATA_DIR = str(tmpdir)
-        OUT_DIR = f'{DATA_DIR}/{EXNO}'
+        OUT_DIR = f'{DATA_DIR}/raw'
         Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
         ENV = 'fizz'
 
-        mocker.patch('src.ex001_fe_download_raw.get_datadir', return_value=DATA_DIR)
-        mocker.patch('src.ex001_fe_download_raw.get_exec_env', return_value=ENV)
+        mocker.patch('src.data.raw_v1.get_datadir', return_value=DATA_DIR)
+        mocker.patch('src.data.raw_v1.get_exec_env', return_value=ENV)
 
         with pytest.raises(ValueError):
-            ex001_fe_download_raw.main()
+            raw_v1.main()
