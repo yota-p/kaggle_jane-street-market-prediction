@@ -5,7 +5,7 @@ import hydra
 from argparse import ArgumentParser
 
 
-def get_exec_env() -> (str, str):
+def get_exec_env() -> str:
     kaggle_kernel_run_type = os.environ.get('KAGGLE_KERNEL_RUN_TYPE', '')
     if kaggle_kernel_run_type == 'Interactive':
         return 'kaggle-Interactive'
@@ -121,7 +121,7 @@ def get_datadir() -> str:
     if env in ['kaggle-Interactive', 'kaggle-Batch']:
         return '/kaggle/working/data'
     elif env == 'colab':
-        return None
+        return ''
     elif env == 'local':
         return get_original_cwd() + '/data'
     else:
