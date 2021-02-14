@@ -44,16 +44,19 @@ def predict_fillna_forward(models: List[Any], features: List[str], target: str, 
     print('Start predicting')
     time_start = time.time()
     tmp = np.zeros(len(features))  # this np.ndarray will contain last seen values for features
-    for (test_df, sample_prediction_df) in iter_test:  # iter_test generates test_df(1,130)
-        x_tt = test_df.loc[:, features].values  # this is (1,130) ndarray([[values...]])
-        x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
-        tmp = x_tt[0, :]  # save last seen values to tmp
-        y_pred: np.ndarray = 0.
-        for model in models:
-            y_pred += model.predict(x_tt) / len(models)
-        y_pred = y_pred > 0
-        sample_prediction_df[target] = y_pred.astype(int)
-        env.predict(sample_prediction_df)
+    for (test_df, pred_df) in iter_test:  # iter_test generates test_df(1,130)
+        if test_df['weight'].item() > 0:
+            x_tt = test_df.loc[:, features].values  # this is (1,130) ndarray([[values...]])
+            x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
+            tmp = x_tt[0, :]  # save last seen values to tmp
+            y_pred: np.ndarray = 0.
+            for model in models:
+                y_pred += model.predict(x_tt) / len(models)
+            y_pred = y_pred > 0
+            pred_df[target] = y_pred.astype(int)
+        else:
+            pred_df[target] = 0
+        env.predict(pred_df)
 
     elapsed_time = time.time() - time_start
     test_len = 15219  # length of test data (for developing API)
@@ -71,16 +74,19 @@ def predict_fillna_999(models: List[Any], features: List[str], target: str, OUT_
 
     print('Start predicting')
     time_start = time.time()
-    for (test_df, sample_prediction_df) in iter_test:
-        X_test = test_df.loc[:, features]
-        X_test.fillna(-999)
+    for (test_df, pred_df) in iter_test:
+        if test_df['weight'].item() > 0:
+            X_test = test_df.loc[:, features]
+            X_test.fillna(-999)
 
-        y_pred: np.ndarray = 0.
-        for model in models:
-            y_pred += model.predict(X_test.values) / len(models)
-        y_pred = y_pred > 0
-        sample_prediction_df[target] = y_pred.astype(int)
-        env.predict(sample_prediction_df)
+            y_pred: np.ndarray = 0.
+            for model in models:
+                y_pred += model.predict(X_test.values) / len(models)
+            y_pred = y_pred > 0
+            pred_df[target] = y_pred.astype(int)
+        else:
+            pred_df[target] = 0
+        env.predict(pred_df)
 
     elapsed_time = time.time() - time_start
     test_len = 15219  # length of test data (for developing API)
