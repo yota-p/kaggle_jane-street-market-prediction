@@ -30,8 +30,8 @@ model:
     random_state: 2020
     # tree_method: gpu_hist
   train_param:
-    eval_metric: logloss
-    # early_stopping_rounds: 30
+    eval_metric: null
+    early_stopping_rounds: null
 
 target:
   path: 002/train.pkl
