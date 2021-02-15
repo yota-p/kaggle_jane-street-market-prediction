@@ -188,7 +188,7 @@ def train_cv(
     return None
 
 
-@hydra.main(config_path="../conf/train_v1", config_name="config")
+@hydra.main(config_path="../config/train_v1", config_name="config")
 def main(cfg: DictConfig) -> None:
     pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
