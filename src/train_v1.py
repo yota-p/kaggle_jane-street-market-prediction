@@ -232,14 +232,20 @@ def main(cfg: DictConfig) -> None:
 
     print(f'Input train shape: {train.shape}')
 
-    # cut weight <= 0
-    train = train.query('weight > 0').reset_index(drop=True)
+    # Feature engineering
+    if cfg.feature_engineering.weight_cutoff is not None:
+        # cfg.weight.cutoff should be numerical
+        train = train.query(f'weight > {cfg.feature_engineering.weight_cutoff}').reset_index(drop=True)
 
     # Fill missing values
     if cfg.feature_engineering.method_fillna == '-999':
         train.loc[:, features] = train.loc[:, features].fillna(-999)
     elif cfg.feature_engineering.method_fillna == 'forward':
         train.loc[:, features] = train.loc[:, features].fillna(method='ffill').fillna(0)
+    elif cfg.feature_engineering.method_fillna is None:
+        pass
+    else:
+        raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
 
     # Train
     if cfg.option.train:
@@ -258,15 +264,6 @@ def main(cfg: DictConfig) -> None:
             models.append(model)
 
         predict(models, cfg.feature_engineering, cfg.target.col, OUT_DIR)
-
-        '''
-        if cfg.feature_engineering.method_fillna == '-999':
-            predict_fillna_999(models, cfg.feature_engineering, cfg.target.col, OUT_DIR)
-        elif cfg.feature_engineering.method_fillna == 'forward':
-            predict_fillna_forward(models, cfg.feature_engineering, cfg.target.col, OUT_DIR)
-        else:
-            raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
-        '''
 
     return None
 
