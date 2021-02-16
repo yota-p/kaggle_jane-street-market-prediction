@@ -32,7 +32,23 @@ def create_janeapi() -> Tuple[Any, Any]:
     return env, iter_test
 
 
-def predict_fillna_forward(models: List[Any], features: List[str], target: str, OUT_DIR: str) -> None:
+def calc_cross_feature(x_tt: np.ndarray) -> np.ndarray:
+    '''
+    Function to caclulate cross feature.
+    Input: x_tt: (1,N) ndarray. Column order should follow the dataframe created by janestreet api
+    Output: y_tt: (1, N+k) ndarray. Right k rows contain calculated cross features.
+    '''
+    cross_41_42_43 = x_tt[:, 41] + x_tt[:, 42] + x_tt[:, 43]
+    cross_1_2 = x_tt[:, 1] / (x_tt[:, 2] + 1e-5)
+    y_tt = np.concatenate((
+        x_tt,
+        np.array(cross_41_42_43).reshape(x_tt.shape[0], 1),
+        np.array(cross_1_2).reshape(x_tt.shape[0], 1),
+    ), axis=1)
+    return y_tt
+
+
+def predict_fillna_forward(models: List[Any], feature_engineering: DictConfig, target: str, OUT_DIR: str) -> None:
     '''
     Using high-performance nan forward-filling logic by Yirun Zhang
     Note: Be aware of the performance in the 'for' loop!
@@ -41,14 +57,20 @@ def predict_fillna_forward(models: List[Any], features: List[str], target: str, 
     If the performance in 'for' loop is poor, it'll result in submission timeout.
     '''
     env, iter_test = create_janeapi()
+    feat_cols = [f'feature_{i}' for i in range(130)]
     print('Start predicting')
     time_start = time.time()
-    tmp = np.zeros(len(features))  # this np.ndarray will contain last seen values for features
+    tmp = np.zeros(len(feat_cols))  # this np.ndarray will contain last seen values for features
+
     for (test_df, pred_df) in iter_test:  # iter_test generates test_df(1,130)
-        if test_df['weight'].item() > 0:
-            x_tt = test_df.loc[:, features].values  # this is (1,130) ndarray([[values...]])
+        if test_df['weight'].item() > 0:  # cut-off by weight
+            x_tt = test_df.loc[:, feat_cols].values  # this is (1,130) ndarray([[values...]])
             x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
             tmp = x_tt[0, :]  # save last seen values to tmp
+
+            if feature_engineering.cross:
+                x_tt = calc_cross_feature(x_tt)
+
             y_pred: np.ndarray = 0.
             for model in models:
                 y_pred += model.predict(x_tt) / len(models)
@@ -69,19 +91,24 @@ def predict_fillna_forward(models: List[Any], features: List[str], target: str, 
     return None
 
 
-def predict_fillna_999(models: List[Any], features: List[str], target: str, OUT_DIR: str) -> None:
+def predict_fillna_999(models: List[Any], feature_engineering: DictConfig, target: str, OUT_DIR: str) -> None:
     env, iter_test = create_janeapi()
-
+    feat_cols = [f'feature_{i}' for i in range(130)]
     print('Start predicting')
     time_start = time.time()
+
     for (test_df, pred_df) in iter_test:
-        if test_df['weight'].item() > 0:
-            X_test = test_df.loc[:, features]
+        if test_df['weight'].item() > 0:    # cut-off by weight
+            X_test = test_df.loc[:, feat_cols]
             X_test.fillna(-999)
+            x_tt = X_test.values
+
+            if feature_engineering.cross:
+                x_tt = calc_cross_feature(x_tt)
 
             y_pred: np.ndarray = 0.
             for model in models:
-                y_pred += model.predict(X_test.values) / len(models)
+                y_pred += model.predict(x_tt) / len(models)
             y_pred = y_pred > 0
             pred_df[target] = y_pred.astype(int)
         else:
@@ -260,9 +287,9 @@ def main(cfg: DictConfig) -> None:
             models.append(model)
 
         if cfg.feature_engineering.method_fillna == '-999':
-            predict_fillna_999(models, features, cfg.target.col, OUT_DIR)
+            predict_fillna_999(models, cfg.feature_engineering, cfg.target.col, OUT_DIR)
         elif cfg.feature_engineering.method_fillna == 'forward':
-            predict_fillna_forward(models, features, cfg.target.col, OUT_DIR)
+            predict_fillna_forward(models, cfg.feature_engineering, cfg.target.col, OUT_DIR)
         else:
             raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
 
