@@ -11,7 +11,9 @@ option:
   predict: true
 
 feature_engineering:
+  weight_cutoff: 0
   method_fillna: '-999'  # -999, forward
+  cross: false
 
 cv:
   name: 'nocv'

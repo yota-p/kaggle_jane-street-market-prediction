@@ -12,11 +12,11 @@ option:
 
 feature_engineering:
   weight_cutoff: 0
-  method_fillna: '-999'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
   cross: true
 
 cv:
-  name: 'nocv'
+  name: nocv
   param:
     n_splits: 1
 
