@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: prd  # dev, test, prd
 
-out_dir: train_v1/prd005
+out_dir: train_v1/prd007
 
 option:
   train: true
@@ -21,18 +21,11 @@ cv:
     n_splits: 1
 
 model:
-  name: XGBClassifier
+  name: CatBoostClassifier
   model_param:
-    n_estimators: 300
-    max_depth: 7
-    learning_rate: 0.05
-    subsample: 0.9
-    colsample_bytree: 0.7
-    missing: -999
-    random_state: 2020
-    tree_method: gpu_hist
+    loss_function: Logloss
+    eval_metric: AUC
   train_param:
-    eval_metric: null
     early_stopping_rounds: null
 
 target:

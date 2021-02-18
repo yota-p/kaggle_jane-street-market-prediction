@@ -54,7 +54,6 @@ def predict(models: List[Any], feature_engineering: DictConfig, target: str, OUT
     Prediction API generates 1*130 DataFrame per iteration.
     Which means you need to process every record separately. (no vectorization)
     If the performance in 'for' loop is poor, it'll result in submission timeout.
-    For forward fillna, using high-performance logic by Yirun Zhang
     '''
     env, iter_test = create_janeapi()
     feat_cols = [f'feature_{i}' for i in range(130)]
@@ -65,6 +64,7 @@ def predict(models: List[Any], feature_engineering: DictConfig, target: str, OUT
 
     for (test_df, pred_df) in iter_test:  # iter_test generates test_df(1,130)
         if test_df['weight'].item() > 0:  # cut-off by weight
+            # For forward fillna, using high-performance logic by Yirun Zhang
             if feature_engineering.method_fillna == 'forward':
                 x_tt = test_df.loc[:, feat_cols].values  # this is (1,130) ndarray([[values...]])
                 x_tt[0, :] = fast_fillna(x_tt[0, :], tmp)  # use values in tmp to replace nan
@@ -190,6 +190,8 @@ def train_cv(
 def main(cfg: DictConfig) -> None:
     pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
+    OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
+    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     # follow these sequences: uri > experiment > run > others
     tracking_uri = f'{DATA_DIR}/mlruns'
@@ -207,9 +209,6 @@ def main(cfg: DictConfig) -> None:
     mlflow.log_param('cv.name', cfg.cv.name)
     mlflow.log_params(cfg.cv.param)
     mlflow.log_param('feature', cfg.features)
-
-    OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
-    Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     # FE
     train = pd.DataFrame()
@@ -230,7 +229,7 @@ def main(cfg: DictConfig) -> None:
     df = pd.read_pickle(f'{DATA_DIR}/{cfg.target.path}').loc[:, cfg.target.col]
     train = pd.concat([train, df], axis=1)
 
-    print(f'Input train shape: {train.shape}')
+    print(f'Input feature shape: {train.shape}')
 
     # Feature engineering
     if cfg.feature_engineering.weight_cutoff is not None:
