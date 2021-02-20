@@ -34,11 +34,16 @@ EARLYSTOP_NUM = 3
 NFOLDS = 5
 
 TRAIN = True
+DEBUG = True
 # CACHE_PATH = './'
 CACHE_PATH = './data/train_v2'
 Path(CACHE_PATH).mkdir(exist_ok=True, parents=True)
 
 train = pd.read_csv(f'{DATA_PATH}/train.csv')
+
+# eliminate data size
+if DEBUG:
+    train = train[np.mod(train['date'], 10) == 0]
 
 def save_pickle(dic, save_path):
     with open(save_path, 'wb') as f:
