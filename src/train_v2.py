@@ -21,7 +21,7 @@ from torch.nn import BCEWithLogitsLoss
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.nn.modules.loss import _WeightedLoss
 import torch.nn.functional as F
-from src.util.get_environment import get_datadir, get_exec_env
+from src.util.get_environment import get_datadir, get_exec_env, get_device()
 from src.util.fast_fillna import fast_fillna
 from src.util.calc_utility_score import utility_score_bincount
 
@@ -376,7 +376,7 @@ def main(cfg: DictConfig) -> None:
         print(f'Fold{i}:')
         seed_everything(seed=42+i)
         torch.cuda.empty_cache()
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = get_device()
         if cfg.model.name == 'torch_v1':
             model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
         else:
@@ -436,7 +436,7 @@ def main(cfg: DictConfig) -> None:
     valid_pred = np.zeros((len(valid), len(target_cols)))
     for i in range(NMODELS):
         torch.cuda.empty_cache()
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = get_device()
         if cfg.model.name == 'torch_v1':
             model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
         else:
@@ -458,7 +458,7 @@ def main(cfg: DictConfig) -> None:
 
     # Predict
     if cfg.option.predict:
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = get_device()
         model_list = []
         for i in range(NMODELS):
             torch.cuda.empty_cache()
