@@ -4,34 +4,48 @@
 import os
 import time
 import pickle
-from pathlib import Path
 import random
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from sklearn.metrics import log_loss, roc_auc_score
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torch.nn import CrossEntropyLoss, MSELoss
 from torch.nn.modules.loss import _WeightedLoss
 import torch.nn.functional as F
 
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_rows', 100)
 
+DATA_PATH = '../input/jane-street-market-prediction/'
+
+# GPU_NUM = 8
+BATCH_SIZE = 8192# * GPU_NUM
+EPOCHS = 200
+LEARNING_RATE = 1e-3
+WEIGHT_DECAY = 1e-5
+EARLYSTOP_NUM = 3
+NFOLDS = 5
+
+TRAIN = True
+CACHE_PATH = './'
+
+train = pd.read_csv(f'{DATA_PATH}/train.csv')
 
 def save_pickle(dic, save_path):
     with open(save_path, 'wb') as f:
-        # with gzip.open(save_path, 'wb') as f:
+    # with gzip.open(save_path, 'wb') as f:
         pickle.dump(dic, f)
-
 
 def load_pickle(load_path):
     with open(load_path, 'rb') as f:
-        # with gzip.open(load_path, 'rb') as f:
+    # with gzip.open(load_path, 'rb') as f:
         message_dict = pickle.load(f)
     return message_dict
-
 
 class EarlyStopping:
     def __init__(self, patience=7, mode="max", delta=0.001):
@@ -56,7 +70,7 @@ class EarlyStopping:
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint(epoch_score, model, model_path)
-        elif score < self.best_score:  # + self.delta
+        elif score < self.best_score: #  + self.delta
             self.counter += 1
             # print('EarlyStopping counter: {} out of {}'.format(self.counter, self.patience))
             if self.counter >= self.patience:
@@ -75,7 +89,6 @@ class EarlyStopping:
             torch.save(model.state_dict(), model_path)
         self.val_score = epoch_score
 
-
 def seed_everything(seed=42):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -83,9 +96,34 @@ def seed_everything(seed=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+seed_everything(seed=42)
 
+feat_cols = [f'feature_{i}' for i in range(130)]
 
-# Making features
+if TRAIN:
+    train = train.loc[train.date > 85].reset_index(drop=True)
+
+    train['action'] = (train['resp'] > 0).astype('int')
+    train['action_1'] = (train['resp_1'] > 0).astype('int')
+    train['action_2'] = (train['resp_2'] > 0).astype('int')
+    train['action_3'] = (train['resp_3'] > 0).astype('int')
+    train['action_4'] = (train['resp_4'] > 0).astype('int')
+    valid = train.loc[(train.date >= 450) & (train.date < 500)].reset_index(drop=True)
+    train = train.loc[train.date < 450].reset_index(drop=True)
+target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
+
+if TRAIN:
+    df = pd.concat([train[feat_cols], valid[feat_cols]]).reset_index(drop=True)
+    f_mean = df.mean()
+    f_mean = f_mean.values
+    np.save(f'{CACHE_PATH}/f_mean_online.npy', f_mean)
+
+    train.fillna(df.mean(), inplace=True)
+    valid.fillna(df.mean(), inplace=True)
+else:
+    f_mean = np.load(f'{CACHE_PATH}/f_mean_online.npy')
+
+##### Making features
 # https://www.kaggle.com/lucasmorin/running-algos-fe-for-fast-inference/data
 # eda:https://www.kaggle.com/carlmcbrideellis/jane-street-eda-of-day-0-and-feature-importance
 # his example:https://www.kaggle.com/gracewan/plot-model
@@ -93,7 +131,6 @@ def fillna_npwhere_njit(array, values):
     if np.isnan(array.sum()):
         array = np.where(np.isnan(array), values, array)
     return array
-
 
 class RunningEWMean:
     def __init__(self, WIN_SIZE=20, n_size=1, lt_mean=None):
@@ -116,8 +153,17 @@ class RunningEWMean:
     def get_mean(self):
         return self.s
 
+if TRAIN:
+    all_feat_cols = [col for col in feat_cols]
 
-# Model&Data fnc
+    train['cross_41_42_43'] = train['feature_41'] + train['feature_42'] + train['feature_43']
+    train['cross_1_2'] = train['feature_1'] / (train['feature_2'] + 1e-5)
+    valid['cross_41_42_43'] = valid['feature_41'] + valid['feature_42'] + valid['feature_43']
+    valid['cross_1_2'] = valid['feature_1'] / (valid['feature_2'] + 1e-5)
+
+    all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
+
+##### Model&Data fnc
 class SmoothBCEwLogits(_WeightedLoss):
     def __init__(self, weight=None, reduction='mean', smoothing=0.0):
         super().__init__(weight=weight, reduction=reduction)
@@ -126,26 +172,26 @@ class SmoothBCEwLogits(_WeightedLoss):
         self.reduction = reduction
 
     @staticmethod
-    def _smooth(targets: torch.Tensor, n_labels: int, smoothing=0.0):
+    def _smooth(targets:torch.Tensor, n_labels:int, smoothing=0.0):
         assert 0 <= smoothing < 1
         with torch.no_grad():
             targets = targets * (1.0 - smoothing) + 0.5 * smoothing
         return targets
 
     def forward(self, inputs, targets):
-        targets = SmoothBCEwLogits._smooth(targets, inputs.size(-1), self.smoothing)
-        loss = F.binary_cross_entropy_with_logits(inputs, targets, self.weight)
+        targets = SmoothBCEwLogits._smooth(targets, inputs.size(-1),
+            self.smoothing)
+        loss = F.binary_cross_entropy_with_logits(inputs, targets,self.weight)
 
-        if self.reduction == 'sum':
+        if  self.reduction == 'sum':
             loss = loss.sum()
-        elif self.reduction == 'mean':
+        elif  self.reduction == 'mean':
             loss = loss.mean()
 
         return loss
 
-
-class MarketDataset(Dataset):
-    def __init__(self, df, all_feat_cols, target_cols):
+class MarketDataset:
+    def __init__(self, df):
         self.features = df[all_feat_cols].values
 
         self.label = df[target_cols].values.reshape(-1, len(target_cols))
@@ -161,7 +207,7 @@ class MarketDataset(Dataset):
 
 
 class Model(nn.Module):
-    def __init__(self, all_feat_cols, target_cols):
+    def __init__(self):
         super(Model, self).__init__()
         self.batch_norm0 = nn.BatchNorm1d(len(all_feat_cols))
         self.dropout0 = nn.Dropout(0.2)
@@ -236,7 +282,6 @@ class Model(nn.Module):
 
         return x
 
-
 def train_fn(model, optimizer, scheduler, loss_fn, dataloader, device):
     model.train()
     final_loss = 0
@@ -258,8 +303,7 @@ def train_fn(model, optimizer, scheduler, loss_fn, dataloader, device):
 
     return final_loss
 
-
-def inference_fn(model, dataloader, device, target_cols):
+def inference_fn(model, dataloader, device):
     model.eval()
     preds = []
 
@@ -275,7 +319,6 @@ def inference_fn(model, dataloader, device, target_cols):
 
     return preds
 
-
 def utility_score_bincount(date, weight, resp, action):
     count_i = len(np.unique(date))
     # print('weight: ', weight)
@@ -287,136 +330,67 @@ def utility_score_bincount(date, weight, resp, action):
     u = np.clip(t, 0, 6) * np.sum(Pi)
     return u
 
+if TRAIN:
+    train_set = MarketDataset(train)
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    valid_set = MarketDataset(valid)
+    valid_loader = DataLoader(valid_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
-def main():
-    # DATA_PATH = '../input/jane-street-market-prediction/'
-    DATA_PATH = './data/raw'
+    start_time = time.time()
+    for _fold in range(NFOLDS):
+        print(f'Fold{_fold}:')
+        seed_everything(seed=42+_fold)
+        torch.cuda.empty_cache()
+        device = torch.device("cuda:0")
+        model = Model()
+        model.to(device)
+        # model = nn.DataParallel(model)
 
-    # GPU_NUM = 8
-    BATCH_SIZE = 8192  # * GPU_NUM
-    EPOCHS = 200
-    LEARNING_RATE = 1e-3
-    WEIGHT_DECAY = 1e-5
-    EARLYSTOP_NUM = 3
-    NFOLDS = 5
+        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+        # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+        # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
+        scheduler = None
+        # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, pct_start=0.1, div_factor=1e3,
+        #                                                 max_lr=1e-2, epochs=EPOCHS, steps_per_epoch=len(train_loader))
+        # loss_fn = nn.BCEWithLogitsLoss()
+        loss_fn = SmoothBCEwLogits(smoothing=0.005)
 
-    TRAIN = True
-    DEBUG = True
-    # CACHE_PATH = './'
-    CACHE_PATH = './data/train_v2'
-    Path(CACHE_PATH).mkdir(exist_ok=True, parents=True)
+        model_weights = f"{CACHE_PATH}/online_model{_fold}.pth"
+        es = EarlyStopping(patience=EARLYSTOP_NUM, mode="max")
+        for epoch in range(EPOCHS):
+            train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
 
-    train = pd.read_csv(f'{DATA_PATH}/train.csv')
-
-    # extract limited dates
-    if DEBUG:
-        train = train[np.mod(train['date'], 100) == 0]
-
-    seed_everything(seed=42)
-
-    feat_cols = [f'feature_{i}' for i in range(130)]
-
-    if TRAIN:
-        train = train.loc[train.date > 85].reset_index(drop=True)
-
-        train['action'] = (train['resp'] > 0).astype('int')
-        train['action_1'] = (train['resp_1'] > 0).astype('int')
-        train['action_2'] = (train['resp_2'] > 0).astype('int')
-        train['action_3'] = (train['resp_3'] > 0).astype('int')
-        train['action_4'] = (train['resp_4'] > 0).astype('int')
-        valid = train.loc[(train.date >= 450) & (train.date < 500)].reset_index(drop=True)
-        train = train.loc[train.date < 450].reset_index(drop=True)
-    target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
-
-    if TRAIN:
-        df = pd.concat([train[feat_cols], valid[feat_cols]]).reset_index(drop=True)
-        f_mean = df.mean()
-        f_mean = f_mean.values
-        np.save(f'{CACHE_PATH}/f_mean_online.npy', f_mean)
-
-        train.fillna(df.mean(), inplace=True)
-        valid.fillna(df.mean(), inplace=True)
-    else:
-        f_mean = np.load(f'{CACHE_PATH}/f_mean_online.npy')
-
-    if TRAIN:
-        all_feat_cols = [col for col in feat_cols]
-
-        train['cross_41_42_43'] = train['feature_41'] + train['feature_42'] + train['feature_43']
-        train['cross_1_2'] = train['feature_1'] / (train['feature_2'] + 1e-5)
-        valid['cross_41_42_43'] = valid['feature_41'] + valid['feature_42'] + valid['feature_43']
-        valid['cross_1_2'] = valid['feature_1'] / (valid['feature_2'] + 1e-5)
-
-        all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
-
-    if TRAIN:
-        train_set = MarketDataset(train)
-        train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-        valid_set = MarketDataset(valid)
-        valid_loader = DataLoader(valid_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
-
-        start_time = time.time()
-        for _fold in range(NFOLDS):
-            print(f'Fold{_fold}:')
-            seed_everything(seed=42+_fold)
-            torch.cuda.empty_cache()
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            print(device)
-            # device(type='cpu')
-            # device = torch.device("cuda:0")
-            model = Model()
-            model.to(device)
-            # model = nn.DataParallel(model)
-
-            optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-            # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-            # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
-            scheduler = None
-            # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, pct_start=0.1, div_factor=1e3,
-            #                                                 max_lr=1e-2, epochs=EPOCHS, steps_per_epoch=len(train_loader))
-            # loss_fn = nn.BCEWithLogitsLoss()
-            loss_fn = SmoothBCEwLogits(smoothing=0.005)
-
-            model_weights = f"{CACHE_PATH}/online_model{_fold}.pth"
-            es = EarlyStopping(patience=EARLYSTOP_NUM, mode="max")
-            for epoch in range(EPOCHS):
-                train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
-
-                valid_pred = inference_fn(model, valid_loader, device)
-                valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
-                # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
-                valid_pred = np.median(valid_pred, axis=1)
-                valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-                valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
-                                                       resp=valid.resp.values, action=valid_pred)
-                print(f"FOLD{_fold} EPOCH:{epoch:3} train_loss={train_loss:.5f}"
-                      f"valid_u_score={valid_u_score:.5f} valid_auc={valid_auc:.5f}"
-                      f"time: {(time.time() - start_time) / 60:.2f}min")
-                es(valid_auc, model, model_path=model_weights)
-                if es.early_stop:
-                    print("Early stopping")
-                    break
-            # torch.save(model.state_dict(), model_weights)
-        if True:
-            valid_pred = np.zeros((len(valid), len(target_cols)))
-            for _fold in range(NFOLDS):
-                torch.cuda.empty_cache()
-                device = torch.device("cuda:0")
-                model = Model()
-                model.to(device)
-                model_weights = f"{CACHE_PATH}/online_model{_fold}.pth"
-                model.load_state_dict(torch.load(model_weights))
-
-                valid_pred += inference_fn(model, valid_loader, device) / NFOLDS
-            auc_score = roc_auc_score(valid[target_cols].values, valid_pred)
-            logloss_score = log_loss(valid[target_cols].values, valid_pred)
-
+            valid_pred = inference_fn(model, valid_loader, device)
+            valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
+            valid_logloss = log_loss(valid[target_cols].values, valid_pred)
             valid_pred = np.median(valid_pred, axis=1)
             valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-            valid_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values, resp=valid.resp.values,
-                                                 action=valid_pred)
-            print(f'{NFOLDS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
+            valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
+                                                   resp=valid.resp.values, action=valid_pred)
+            print(f"FOLD{_fold} EPOCH:{epoch:3} train_loss={train_loss:.5f} "
+                      f"valid_u_score={valid_u_score:.5f} valid_auc={valid_auc:.5f} "
+                      f"time: {(time.time() - start_time) / 60:.2f}min")
+            es(valid_auc, model, model_path=model_weights)
+            if es.early_stop:
+                print("Early stopping")
+                break
+        # torch.save(model.state_dict(), model_weights)
+    if True:
+        valid_pred = np.zeros((len(valid), len(target_cols)))
+        for _fold in range(NFOLDS):
+            torch.cuda.empty_cache()
+            device = torch.device("cuda:0")
+            model = Model()
+            model.to(device)
+            model_weights = f"{CACHE_PATH}/online_model{_fold}.pth"
+            model.load_state_dict(torch.load(model_weights))
 
+            valid_pred += inference_fn(model, valid_loader, device) / NFOLDS
+        auc_score = roc_auc_score(valid[target_cols].values, valid_pred)
+        logloss_score = log_loss(valid[target_cols].values, valid_pred)
 
-if __name__ == '__main__':
-    main()
+        valid_pred = np.median(valid_pred, axis=1)
+        valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
+        valid_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values, resp=valid.resp.values,
+                                             action=valid_pred)
+        print(f'{NFOLDS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
