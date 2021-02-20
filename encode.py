@@ -11,7 +11,7 @@ def encode_file(path: Path) -> str:
 
 def build_script():
     to_encode = [Path(p) for p in glob.glob('src/**/*.py', recursive=True)] \
-              + [Path(p) for p in glob.glob('conf/**/*.yaml', recursive=True)]
+              + [Path(p) for p in glob.glob('config/**/*.yaml', recursive=True)]
     file_data = {str(path): encode_file(path) for path in to_encode}
     template = Path('script/script_template.py').read_text('utf8')
     Path('script/script.py').write_text(
