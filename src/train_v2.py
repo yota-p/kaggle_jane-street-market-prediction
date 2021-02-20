@@ -14,6 +14,8 @@ import pprint
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from torch.nn import BCEWithLogitsLoss
+from torch.optim.lr_scheduler import OneCycleLR
 from torch.nn.modules.loss import _WeightedLoss
 import torch.nn.functional as F
 from src.util.fast_fillna import fast_fillna
@@ -133,13 +135,11 @@ class MarketDataset(Dataset):
 
 
 class Model(nn.Module):
-    def __init__(self, all_feat_cols, target_cols):
+    def __init__(self, all_feat_cols, target_cols, dropout_rate, hidden_size):
         super(Model, self).__init__()
         self.batch_norm0 = nn.BatchNorm1d(len(all_feat_cols))
         self.dropout0 = nn.Dropout(0.2)
 
-        dropout_rate = 0.2
-        hidden_size = 256
         self.dense1 = nn.Linear(len(all_feat_cols), hidden_size)
         self.batch_norm1 = nn.BatchNorm1d(hidden_size)
         self.dropout1 = nn.Dropout(dropout_rate)
@@ -265,26 +265,10 @@ def main(cfg: DictConfig) -> None:
     pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
     # TRAIN = True
-    DEBUG = True
     CACHE_PATH = f'{DATA_DIR}/train_v2'
     Path(CACHE_PATH).mkdir(exist_ok=True, parents=True)
 
-    if DEBUG:
-        # GPU_NUM = 8
-        BATCH_SIZE = 8192  # * GPU_NUM
-        EPOCHS = 10
-        LEARNING_RATE = 1e-3
-        WEIGHT_DECAY = 1e-5
-        EARLYSTOP_NUM = 3
-        NFOLDS = 1
-    else:
-        # GPU_NUM = 8
-        BATCH_SIZE = 8192  # * GPU_NUM
-        EPOCHS = 200
-        LEARNING_RATE = 1e-3
-        WEIGHT_DECAY = 1e-5
-        EARLYSTOP_NUM = 3
-        NFOLDS = 5
+    NFOLDS = cfg.train.param.n_models
 
     seed_everything(seed=42)
     feat_cols = [f'feature_{i}' for i in range(130)]
@@ -294,13 +278,13 @@ def main(cfg: DictConfig) -> None:
     train = pd.read_csv(f'{DATA_DIR}/raw/train.csv')
 
     # eliminate data size
-    if DEBUG:
+    if cfg.mlflow.experiment.tags.exec == 'dev':
         train = train[np.mod(train['date'], 10) == 0]
 
     # Making features
     # https://www.kaggle.com/lucasmorin/running-algos-fe-for-fast-inference/data
-    # eda:https://www.kaggle.com/carlmcbrideellis/jane-street-eda-of-day-0-and-feature-importance
-    # his example:https://www.kaggle.com/gracewan/plot-model
+    # eda: https://www.kaggle.com/carlmcbrideellis/jane-street-eda-of-day-0-and-feature-importance
+    # his example: https://www.kaggle.com/gracewan/plot-model
     train = train.loc[train.date > 85].reset_index(drop=True)
 
     train['action'] = (train['resp'] > 0).astype('int')
@@ -329,9 +313,9 @@ def main(cfg: DictConfig) -> None:
     all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
 
     train_set = MarketDataset(train, all_feat_cols, target_cols)
-    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    train_loader = DataLoader(train_set, batch_size=cfg.train.param.batch_size, shuffle=True, num_workers=4)
     valid_set = MarketDataset(valid, all_feat_cols, target_cols)
-    valid_loader = DataLoader(valid_set, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    valid_loader = DataLoader(valid_set, batch_size=cfg.train.param.batch_size, shuffle=False, num_workers=4)
 
     start_time = time.time()
     for _fold in range(NFOLDS):
@@ -339,22 +323,41 @@ def main(cfg: DictConfig) -> None:
         seed_everything(seed=42+_fold)
         torch.cuda.empty_cache()
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        model = Model(all_feat_cols, target_cols)
+        if cfg.model.name == 'torch_v1':
+            model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
+        else:
+            raise ValueError(f'Invalid model: {cfg.model.name}')
         model.to(device)
         # model = nn.DataParallel(model)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-        # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-        # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
-        scheduler = None
-        # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=optimizer, pct_start=0.1, div_factor=1e3,
-        #                                                 max_lr=1e-2, epochs=EPOCHS, steps_per_epoch=len(train_loader))
-        # loss_fn = nn.BCEWithLogitsLoss()
-        loss_fn = SmoothBCEwLogits(smoothing=0.005)
+        if cfg.train.optimizer == 'torch.optim.Adam':
+            optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.param.lr, weight_decay=cfg.train.param.weight_decay)
+            # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+            # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
+        else:
+            raise ValueError(f'Invalid optimizer: {cfg.train.optimizer}')
+
+        if cfg.train.scheduler is None:
+            scheduler = None
+        elif cfg.train.scheduler == 'torch.optim.lr_scheduler.OneCycleLR':
+            scheduler = OneCycleLR(
+                            optimizer=optimizer,
+                            pct_start=0.1,
+                            div_factor=1e3,
+                            max_lr=1e-2,
+                            epochs=cfg.trainparam.epochs,
+                            steps_per_epoch=len(train_loader))
+        else:
+            raise ValueError(f'Invalid scheduler: {cfg.train.scheduler}')
+
+        if cfg.train.loss_function == 'SmoothBCEwLogits':
+            loss_fn = SmoothBCEwLogits(smoothing=0.005)
+        elif cfg.train.loss_function == 'BCEWithLogitsLoss':
+            loss_fn = BCEWithLogitsLoss()
 
         model_weights = f'{CACHE_PATH}/online_model{_fold}.pth'
-        es = EarlyStopping(patience=EARLYSTOP_NUM, mode='max')
-        for epoch in range(EPOCHS):
+        es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
+        for epoch in range(cfg.train.param.epochs):
             train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
 
             valid_pred = inference_fn(model, valid_loader, device, target_cols)
@@ -378,8 +381,12 @@ def main(cfg: DictConfig) -> None:
         valid_pred = np.zeros((len(valid), len(target_cols)))
         for _fold in range(NFOLDS):
             torch.cuda.empty_cache()
-            device = torch.device('cuda:0')
-            model = Model(all_feat_cols, target_cols)
+            device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+            if cfg.model.name == 'torch_v1':
+                model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
+            else:
+                raise ValueError(f'Invalid model: {cfg.model.name}')
+
             model.to(device)
             model_weights = f'{CACHE_PATH}/online_model{_fold}.pth'
             model.load_state_dict(torch.load(model_weights))
