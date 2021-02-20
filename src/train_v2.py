@@ -289,9 +289,6 @@ def utility_score_bincount(date, weight, resp, action):
 
 
 def main():
-    # DATA_PATH = '../input/jane-street-market-prediction/'
-    DATA_PATH = './data/raw'
-
     # GPU_NUM = 8
     BATCH_SIZE = 8192  # * GPU_NUM
     EPOCHS = 200
@@ -304,17 +301,19 @@ def main():
     DEBUG = True
     # CACHE_PATH = './'
     CACHE_PATH = './data/train_v2'
+    # DATA_PATH = '../input/jane-street-market-prediction/'
+    DATA_PATH = './data/raw'
     Path(CACHE_PATH).mkdir(exist_ok=True, parents=True)
+    seed_everything(seed=42)
+    feat_cols = [f'feature_{i}' for i in range(130)]
+    target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
 
+    # load data
     train = pd.read_csv(f'{DATA_PATH}/train.csv')
 
     # eliminate data size
     if DEBUG:
         train = train[np.mod(train['date'], 10) == 0]
-
-    seed_everything(seed=42)
-
-    feat_cols = [f'feature_{i}' for i in range(130)]
 
     if TRAIN:
         train = train.loc[train.date > 85].reset_index(drop=True)
@@ -326,9 +325,8 @@ def main():
         train['action_4'] = (train['resp_4'] > 0).astype('int')
         valid = train.loc[(train.date >= 450) & (train.date < 500)].reset_index(drop=True)
         train = train.loc[train.date < 450].reset_index(drop=True)
-    target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
 
-    if TRAIN:
+    if True:  # if TRAIN:
         df = pd.concat([train[feat_cols], valid[feat_cols]]).reset_index(drop=True)
         f_mean = df.mean()
         f_mean = f_mean.values
@@ -337,6 +335,7 @@ def main():
         train.fillna(df.mean(), inplace=True)
         valid.fillna(df.mean(), inplace=True)
     else:
+        # Don't use. this causes error!
         f_mean = np.load(f'{CACHE_PATH}/f_mean_online.npy')
 
     if TRAIN:
@@ -360,7 +359,6 @@ def main():
             print(f'Fold{_fold}:')
             seed_everything(seed=42+_fold)
             torch.cuda.empty_cache()
-            # device = torch.device("cuda:0")
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             model = Model(all_feat_cols, target_cols)
             model.to(device)
@@ -385,10 +383,8 @@ def main():
                 # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
                 valid_pred = np.median(valid_pred, axis=1)
                 valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-                valid_u_score = utility_score_bincount(date=valid.date.values,
-                                                       weight=valid.weight.values,
-                                                       resp=valid.resp.values,
-                                                       action=valid_pred)
+                valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
+                                                       resp=valid.resp.values, action=valid_pred)
                 print(f"FOLD{_fold} EPOCH:{epoch:3} train_loss={train_loss:.5f} "
                       f"valid_u_score={valid_u_score:.5f} valid_auc={valid_auc:.5f} "
                       f"time: {(time.time() - start_time) / 60:.2f}min")
@@ -413,10 +409,8 @@ def main():
 
             valid_pred = np.median(valid_pred, axis=1)
             valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-            valid_score = utility_score_bincount(date=valid.date.values,
-                                                 weight=valid.weight.values,
-                                                 resp=valid.resp.values,
-                                                 action=valid_pred)
+            valid_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
+                                                 resp=valid.resp.values, action=valid_pred)
             print(f'{NFOLDS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
 
 
