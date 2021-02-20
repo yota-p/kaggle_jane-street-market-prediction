@@ -12,8 +12,8 @@ def utility_score_numba(date, weight, resp, action):
     return u
 
 
-def utility_score_pd(date, weight, resp, action):
-    count_i = len(pd.unique(date))
+def utility_score_bincount(date, weight, resp, action):
+    count_i = len(np.unique(date))
     Pi = np.bincount(date, weight * resp * action)
     t = np.sum(Pi) / np.sqrt(np.sum(Pi ** 2)) * np.sqrt(250 / count_i)
     u = np.clip(t, 0, 6) * np.sum(Pi)

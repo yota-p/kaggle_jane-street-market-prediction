@@ -1,39 +1,43 @@
 mlflow:
   experiment:
-    name: train_v1
+    name: train_v2
     tags: 
-      exec: prd  # dev, test, prd
+      exec: dev  # dev, test, prd
 
-out_dir: train_v1/prd001
+out_dir: train_v2/dev001
 
 option:
   train: true
   predict: true
 
 feature_engineering:
-  weight_cutoff: 0
-  method_fillna: '-999'  # -999, forward
-  cross: false
+  weight_cutoff: null
+  method_fillna: 'mean'  # -999, mean, forward
+  cross: True
 
 cv:
-  name: 'nocv'
+  name: nocv
   param:
     n_splits: 1
 
 model:
-  name: XGBClassifier
-  model_param:
-    n_estimators: 500
-    max_depth: 11
-    learning_rate: 0.05
-    subsample: 0.9
-    colsample_bytree: 0.7
-    missing: -999
-    random_state: 2020
-    tree_method: gpu_hist
-  train_param:
-    eval_metric: null
-    early_stopping_rounds: null
+  name: torch_v1
+  param:
+    dropout_rate: 0.2
+    hidden_size: 256
+
+train:
+  optimizer: torch.optim.Adam
+  scheduler: null
+  loss_function: SmoothBCEwLogits
+  param:
+    # gpu_num: 8
+    batch_size: 8192  # * gpu_num
+    epochs: 200
+    lr: 0.001
+    weight_decay: 0.00001
+    early_stopping_rounds: 3
+    n_models: 5
 
 target:
   path: processed/basic_v1/train.pkl
