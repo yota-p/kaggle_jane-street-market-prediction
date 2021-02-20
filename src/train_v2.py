@@ -8,14 +8,11 @@ from pathlib import Path
 import random
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from sklearn.metrics import log_loss, roc_auc_score
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss, MSELoss
 from torch.nn.modules.loss import _WeightedLoss
 import torch.nn.functional as F
 
@@ -26,7 +23,7 @@ pd.set_option('display.max_rows', 100)
 DATA_PATH = './data/raw'
 
 # GPU_NUM = 8
-BATCH_SIZE = 8192# * GPU_NUM
+BATCH_SIZE = 8192  # * GPU_NUM
 EPOCHS = 200
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-5
@@ -45,16 +42,19 @@ train = pd.read_csv(f'{DATA_PATH}/train.csv')
 if DEBUG:
     train = train[np.mod(train['date'], 10) == 0]
 
+
 def save_pickle(dic, save_path):
     with open(save_path, 'wb') as f:
-    # with gzip.open(save_path, 'wb') as f:
+        # with gzip.open(save_path, 'wb') as f:
         pickle.dump(dic, f)
+
 
 def load_pickle(load_path):
     with open(load_path, 'rb') as f:
-    # with gzip.open(load_path, 'rb') as f:
+        # with gzip.open(load_path, 'rb') as f:
         message_dict = pickle.load(f)
     return message_dict
+
 
 class EarlyStopping:
     def __init__(self, patience=7, mode="max", delta=0.001):
@@ -79,7 +79,7 @@ class EarlyStopping:
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint(epoch_score, model, model_path)
-        elif score < self.best_score: #  + self.delta
+        elif score < self.best_score:  # + self.delta
             self.counter += 1
             # print('EarlyStopping counter: {} out of {}'.format(self.counter, self.patience))
             if self.counter >= self.patience:
@@ -98,6 +98,7 @@ class EarlyStopping:
             torch.save(model.state_dict(), model_path)
         self.val_score = epoch_score
 
+
 def seed_everything(seed=42):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -105,6 +106,8 @@ def seed_everything(seed=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
 seed_everything(seed=42)
 
 feat_cols = [f'feature_{i}' for i in range(130)]
@@ -132,7 +135,8 @@ if TRAIN:
 else:
     f_mean = np.load(f'{CACHE_PATH}/f_mean_online.npy')
 
-##### Making features
+
+# Making features
 # https://www.kaggle.com/lucasmorin/running-algos-fe-for-fast-inference/data
 # eda:https://www.kaggle.com/carlmcbrideellis/jane-street-eda-of-day-0-and-feature-importance
 # his example:https://www.kaggle.com/gracewan/plot-model
@@ -140,6 +144,7 @@ def fillna_npwhere_njit(array, values):
     if np.isnan(array.sum()):
         array = np.where(np.isnan(array), values, array)
     return array
+
 
 class RunningEWMean:
     def __init__(self, WIN_SIZE=20, n_size=1, lt_mean=None):
@@ -162,6 +167,7 @@ class RunningEWMean:
     def get_mean(self):
         return self.s
 
+
 if TRAIN:
     all_feat_cols = [col for col in feat_cols]
 
@@ -172,7 +178,8 @@ if TRAIN:
 
     all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
 
-##### Model&Data fnc
+
+# Model&Data fnc
 class SmoothBCEwLogits(_WeightedLoss):
     def __init__(self, weight=None, reduction='mean', smoothing=0.0):
         super().__init__(weight=weight, reduction=reduction)
@@ -181,23 +188,23 @@ class SmoothBCEwLogits(_WeightedLoss):
         self.reduction = reduction
 
     @staticmethod
-    def _smooth(targets:torch.Tensor, n_labels:int, smoothing=0.0):
+    def _smooth(targets: torch.Tensor, n_labels: int, smoothing=0.0):
         assert 0 <= smoothing < 1
         with torch.no_grad():
             targets = targets * (1.0 - smoothing) + 0.5 * smoothing
         return targets
 
     def forward(self, inputs, targets):
-        targets = SmoothBCEwLogits._smooth(targets, inputs.size(-1),
-            self.smoothing)
-        loss = F.binary_cross_entropy_with_logits(inputs, targets,self.weight)
+        targets = SmoothBCEwLogits._smooth(targets, inputs.size(-1), self.smoothing)
+        loss = F.binary_cross_entropy_with_logits(inputs, targets, self.weight)
 
-        if  self.reduction == 'sum':
+        if self.reduction == 'sum':
             loss = loss.sum()
-        elif  self.reduction == 'mean':
+        elif self.reduction == 'mean':
             loss = loss.mean()
 
         return loss
+
 
 class MarketDataset:
     def __init__(self, df):
@@ -291,6 +298,7 @@ class Model(nn.Module):
 
         return x
 
+
 def train_fn(model, optimizer, scheduler, loss_fn, dataloader, device):
     model.train()
     final_loss = 0
@@ -312,6 +320,7 @@ def train_fn(model, optimizer, scheduler, loss_fn, dataloader, device):
 
     return final_loss
 
+
 def inference_fn(model, dataloader, device):
     model.eval()
     preds = []
@@ -328,6 +337,7 @@ def inference_fn(model, dataloader, device):
 
     return preds
 
+
 def utility_score_bincount(date, weight, resp, action):
     count_i = len(np.unique(date))
     # print('weight: ', weight)
@@ -338,6 +348,7 @@ def utility_score_bincount(date, weight, resp, action):
     t = np.sum(Pi) / np.sqrt(np.sum(Pi ** 2)) * np.sqrt(250 / count_i)
     u = np.clip(t, 0, 6) * np.sum(Pi)
     return u
+
 
 if TRAIN:
     train_set = MarketDataset(train)
@@ -377,9 +388,9 @@ if TRAIN:
             valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
             valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
                                                    resp=valid.resp.values, action=valid_pred)
-            print(f"FOLD{_fold} EPOCH:{epoch:3} train_loss={train_loss:.5f} "
-                      f"valid_u_score={valid_u_score:.5f} valid_auc={valid_auc:.5f} "
-                      f"time: {(time.time() - start_time) / 60:.2f}min")
+            print(f"FOLD{_fold} EPOCH:{epoch:3} train_loss={train_loss:.5f}"
+                  f"valid_u_score={valid_u_score:.5f} valid_auc={valid_auc:.5f}"
+                  f"time: {(time.time() - start_time) / 60:.2f}min")
             es(valid_auc, model, model_path=model_weights)
             if es.early_stop:
                 print("Early stopping")
