@@ -2,9 +2,9 @@ mlflow:
   experiment:
     name: train_v1
     tags: 
-      exec: dev  # dev, test, prd
+      exec: prd  # dev, test, prd
 
-out_dir: train_v1/dev001
+out_dir: train_v1/prd006
 
 option:
   train: true
@@ -12,8 +12,8 @@ option:
 
 feature_engineering:
   weight_cutoff: 0
-  method_fillna: '-999'  # -999, forward
-  cross: false
+  method_fillna: 'forward'  # -999, forward
+  cross: true
 
 cv:
   name: nocv
@@ -21,16 +21,28 @@ cv:
     n_splits: 1
 
 model:
-  name: XGBClassifier
+  name: LGBMClassifier
   model_param:
-    n_estimators: 2
-    max_depth: 2
-    learning_rate: 0.05
-    subsample: 0.9
-    colsample_bytree: 0.7
-    missing: -999
-    random_state: 2020
-    # tree_method: gpu_hist
+    boosting_type: gbdt
+    num_leaves: 31
+    max_depth: -1
+    learning_rate: 0.1
+    n_estimators: 100
+    subsample_for_bin: 200000
+    objective: null
+    class_weight: null
+    min_split_gain: 0.0
+    min_child_weight: 0.001
+    min_child_samples: 20
+    subsample: 1.0
+    subsample_freq: 0
+    colsample_bytree: 1.0
+    reg_alpha: 0.0
+    reg_lambda: 0.0
+    random_state: null
+    n_jobs: -1
+    silent: True
+    importance_type: split
   train_param:
     eval_metric: null
     early_stopping_rounds: null
@@ -185,3 +197,9 @@ features:
       - feature_127
       - feature_128
       - feature_129
+
+  - name: cross_v1
+    path: processed/cross_v1/train.pkl
+    cols:
+      - cross_41_42_43
+      - cross_1_2

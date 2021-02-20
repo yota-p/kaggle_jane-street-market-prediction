@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: dev  # dev, test, prd
 
-out_dir: train_v1/dev001
+out_dir: train_v1/dev005
 
 option:
   train: true
@@ -12,8 +12,8 @@ option:
 
 feature_engineering:
   weight_cutoff: 0
-  method_fillna: '-999'  # -999, forward
-  cross: false
+  method_fillna: 'forward'  # -999, forward
+  cross: true
 
 cv:
   name: nocv
@@ -23,8 +23,8 @@ cv:
 model:
   name: XGBClassifier
   model_param:
-    n_estimators: 2
-    max_depth: 2
+    n_estimators: 2  # 500
+    max_depth: 2  # 11
     learning_rate: 0.05
     subsample: 0.9
     colsample_bytree: 0.7
@@ -185,3 +185,9 @@ features:
       - feature_127
       - feature_128
       - feature_129
+
+  - name: cross_v1
+    path: processed/cross_v1/train.pkl
+    cols:
+      - cross_41_42_43
+      - cross_1_2

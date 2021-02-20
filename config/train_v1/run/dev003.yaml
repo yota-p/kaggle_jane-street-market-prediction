@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: dev  # dev, test, prd
 
-out_dir: train_v1/dev001
+out_dir: train_v1/dev003
 
 option:
   train: true
@@ -12,13 +12,16 @@ option:
 
 feature_engineering:
   weight_cutoff: 0
-  method_fillna: '-999'  # -999, forward
+  method_fillna: 'forward'  # -999, forward
   cross: false
 
 cv:
-  name: nocv
+  name: 'PurgedGroupTimeSeriesSplit'
   param:
-    n_splits: 1
+    n_splits: 10
+    max_train_group_size: 150
+    group_gap: 30
+    max_test_group_size: 60
 
 model:
   name: XGBClassifier
@@ -32,8 +35,8 @@ model:
     random_state: 2020
     # tree_method: gpu_hist
   train_param:
-    eval_metric: null
-    early_stopping_rounds: null
+    eval_metric: logloss
+    early_stopping_rounds: 30
 
 target:
   path: processed/basic_v1/train.pkl

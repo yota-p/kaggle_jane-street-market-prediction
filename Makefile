@@ -76,11 +76,11 @@ endif
 
 ## Upload Data to GCS
 to_gcs:
-	gsutil rsync -d -r data/ gs://$(GCS_BUCKET)/data/
+	gsutil -m rsync -d -r data/ gs://$(GCS_BUCKET)/data/
 
 ## Download Data from GCS
 from_gcs:
-	gsutil rsync -d -r gs://$(GCS_BUCKET)/data/ data/
+	gsutil -m rsync -d -r gs://$(GCS_BUCKET)/data/ data/
 
 #################################################################################
 # Self Documenting Commands                                                     #
