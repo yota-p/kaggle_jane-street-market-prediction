@@ -4,6 +4,7 @@
 import os
 import time
 import pickle
+from pathlib import Path
 import random
 import numpy as np
 import pandas as pd
@@ -21,7 +22,8 @@ import torch.nn.functional as F
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_rows', 100)
 
-DATA_PATH = '../input/jane-street-market-prediction/'
+# DATA_PATH = '../input/jane-street-market-prediction/'
+DATA_PATH = './data/raw'
 
 # GPU_NUM = 8
 BATCH_SIZE = 8192# * GPU_NUM
@@ -32,7 +34,9 @@ EARLYSTOP_NUM = 3
 NFOLDS = 5
 
 TRAIN = True
-CACHE_PATH = './'
+# CACHE_PATH = './'
+CACHE_PATH = './data/train_v2'
+Path(CACHE_PATH).mkdir(exist_ok=True, parents=True)
 
 train = pd.read_csv(f'{DATA_PATH}/train.csv')
 
@@ -341,7 +345,8 @@ if TRAIN:
         print(f'Fold{_fold}:')
         seed_everything(seed=42+_fold)
         torch.cuda.empty_cache()
-        device = torch.device("cuda:0")
+        # device = torch.device("cuda:0")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = Model()
         model.to(device)
         # model = nn.DataParallel(model)
