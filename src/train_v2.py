@@ -368,7 +368,6 @@ def main(cfg: DictConfig) -> None:
     OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
     Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
-    NMODELS = cfg.train.param.n_models
     seed_everything(seed=42)
     feat_cols = [f'feature_{i}' for i in range(130)]
     target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
@@ -392,8 +391,11 @@ def main(cfg: DictConfig) -> None:
     train['action_2'] = (train['resp_2'] > 0).astype('int')
     train['action_3'] = (train['resp_3'] > 0).astype('int')
     train['action_4'] = (train['resp_4'] > 0).astype('int')
+    if cfg.cv.name is None:
+        print('Training on full data. Note that validation data overlaps train, which is overfitting!!!')
+    else:
+        train = train.loc[train.date < 450].reset_index(drop=True)
     valid = train.loc[(train.date >= 450) & (train.date < 500)].reset_index(drop=True)
-    # train = train.loc[train.date < 450].reset_index(drop=True)  # Train on full data. Note: Validation contains leak!!!
 
     df = pd.concat([train[feat_cols], valid[feat_cols]]).reset_index(drop=True)
     f_mean = df.mean().values
@@ -425,6 +427,7 @@ def main(cfg: DictConfig) -> None:
         all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
 
     # Train
+    NMODELS = cfg.train.param.n_models
     train_set = MarketDataset(train, all_feat_cols, target_cols)
     train_loader = DataLoader(train_set, batch_size=cfg.train.param.batch_size, shuffle=True, num_workers=4)
     valid_set = MarketDataset(valid, all_feat_cols, target_cols)

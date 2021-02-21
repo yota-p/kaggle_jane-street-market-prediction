@@ -253,7 +253,7 @@ def main(cfg: DictConfig) -> None:
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
             train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.model_param, cfg.model.train_param, cfg.cv.param, OUT_DIR)
         else:
-            raise ValueError(f'Invalid cv: {cfg.cv}')
+            raise ValueError(f'Invalid cv: {cfg.cv.name}')
 
     # Predict
     if cfg.option.predict:

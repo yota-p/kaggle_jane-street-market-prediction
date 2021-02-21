@@ -27,15 +27,28 @@ model:
     hidden_size: 256
 
 train:
-  optimizer: torch.optim.Adam
-  scheduler: null
-  loss_function: SmoothBCEwLogits
+  optimizer:
+    name: 'Adam'
+    param:
+      lr: 0.001
+      weight_decay: 0.00001
+  scheduler:
+    name: null
+    param: null
+    # name: OneCycleLR
+    # param: 
+    # pct_start: 0.1
+    # div_factory: 0.001
+    # max_lr: 0.01
+    # epochs: 3
+  loss_function:
+    name: SmoothBCEwLogits
+    param:
+      smoothing: 0.005
   param:
     # gpu_num: 8
     batch_size: 8192  # * gpu_num
     epochs: 200
-    lr: 0.001
-    weight_decay: 0.00001
     early_stopping_rounds: 3
     n_models: 5
 
