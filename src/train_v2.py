@@ -325,6 +325,7 @@ def main(cfg: DictConfig) -> None:
         f_mean = nfl.mean_.values
         np.save(f'{OUT_DIR}/nfl_mean.npy', f_mean)
 
+    # Calculate cross features
     crs = CrossFeatureCalculator(cfg.feature_engineering.cross.cols)
     df = crs.fit_transform(df)
     if cfg.feature_engineering.cross.cols is not None:
@@ -337,10 +338,6 @@ def main(cfg: DictConfig) -> None:
     else:
         train = df.loc[df.date < 450].reset_index(drop=True)
         valid = df.loc[(df.date >= 450) & (df.date < 500)].reset_index(drop=True)
-
-    train.to_pickle(f'{OUT_DIR}/train.pkl')
-    valid.to_pickle(f'{OUT_DIR}/valid.pkl')
-    del df
     print(f'Finished feature engineering. train.shape: {train.shape}, valid.shape: {valid.shape}')
 
     # Train
