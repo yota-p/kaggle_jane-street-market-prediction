@@ -307,7 +307,7 @@ def inference_fn(model, dataloader, device, target_cols):
 def main(cfg: DictConfig) -> None:
     pprint.pprint(dict(cfg))
     DATA_DIR = get_datadir()
-    OUT_DIR = f'{DATA_DIR}/cfg.out_dir'
+    OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
     Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
 
     NMODELS = cfg.train.param.n_models
