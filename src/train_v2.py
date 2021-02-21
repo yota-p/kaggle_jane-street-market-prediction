@@ -189,6 +189,64 @@ class MarketDataset(Dataset):
         }
 
 
+def get_model(
+        model_name: str,
+        param: DictConfig,
+        feat_cols: List[str],
+        target_cols: List[str],
+        device: torch.device,) -> nn.Module:
+
+    if model_name == 'torch_v1':
+        model = Model(feat_cols, target_cols, param.dropout_rate, param.hidden_size)
+        model.to(device)
+        return model
+    else:
+        raise ValueError(f'Invalid model: {model_name}')
+
+
+def get_optimizer(
+        optimizer_name: str,
+        param: DictConfig,
+        model_param) -> torch.optim.Optimizer:
+    if optimizer_name == 'Adam':
+        return torch.optim.Adam(model_param, lr=param.lr, weight_decay=param.weight_decay)
+        # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+        # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
+    else:
+        raise ValueError(f'Invalid optimizer: {optimizer_name}')
+
+
+def get_scheduler(
+        scheduler_name: str,
+        param: DictConfig,
+        steps_per_epoch: int,
+        optimizer: torch.optim.Optimizer) -> Any:
+    if scheduler_name is None:
+        return None
+    elif scheduler_name == 'OneCycleLR':
+        return OneCycleLR(
+                    optimizer=param.optimizer,
+                    pct_start=param.pct_start,
+                    div_factor=param.dev_factor,
+                    max_lr=param.max_lr,
+                    epochs=param.epochs,
+                    steps_per_epoch=steps_per_epoch)
+    else:
+        raise ValueError(f'Invalid scheduler: {scheduler_name}')
+
+
+def get_loss_function(
+        loss_function_name: str,
+        param: DictConfig) -> torch.nn.modules.loss._Loss:  # _WeightedLoss or BCEWithLogitsLoss
+
+    if loss_function_name == 'SmoothBCEwLogits':
+        return SmoothBCEwLogits(smoothing=param.smoothing)
+    elif loss_function_name == 'BCEWithLogitsLoss':
+        return BCEWithLogitsLoss()
+    else:
+        raise ValueError(f'Invalid loss functin: {loss_function_name}')
+
+
 class Model(nn.Module):
     def __init__(self, all_feat_cols, target_cols, dropout_rate, hidden_size):
         super(Model, self).__init__()
@@ -335,7 +393,7 @@ def main(cfg: DictConfig) -> None:
     train['action_3'] = (train['resp_3'] > 0).astype('int')
     train['action_4'] = (train['resp_4'] > 0).astype('int')
     valid = train.loc[(train.date >= 450) & (train.date < 500)].reset_index(drop=True)
-    train = train.loc[train.date < 450].reset_index(drop=True)
+    # train = train.loc[train.date < 450].reset_index(drop=True)  # Train on full data. Note: Validation contains leak!!!
 
     df = pd.concat([train[feat_cols], valid[feat_cols]]).reset_index(drop=True)
     f_mean = df.mean().values
@@ -375,41 +433,32 @@ def main(cfg: DictConfig) -> None:
     if cfg.option.train:
         start_time = time.time()
         for i in range(NMODELS):
-            print(f'Fold{i}:')
+            print(f'Model{i}:')
             seed_everything(seed=42+i)
+
             torch.cuda.empty_cache()
             device = get_device()
-            if cfg.model.name == 'torch_v1':
-                model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
-            else:
-                raise ValueError(f'Invalid model: {cfg.model.name}')
-            model.to(device)
-            # model = nn.DataParallel(model)
+            model = get_model(
+                        model_name=cfg.model.name,
+                        param=cfg.model.param,
+                        feat_cols=all_feat_cols,
+                        target_cols=target_cols,
+                        device=device)
 
-            if cfg.train.optimizer == 'torch.optim.Adam':
-                optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.param.lr, weight_decay=cfg.train.param.weight_decay)
-                # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-                # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
-            else:
-                raise ValueError(f'Invalid optimizer: {cfg.train.optimizer}')
+            optimizer = get_optimizer(
+                            optimizer_name=cfg.train.optimizer.name,
+                            param=cfg.train.optimizer.param,
+                            model_param=model.parameters())
 
-            if cfg.train.scheduler is None:
-                scheduler = None
-            elif cfg.train.scheduler == 'torch.optim.lr_scheduler.OneCycleLR':
-                scheduler = OneCycleLR(
-                                optimizer=optimizer,
-                                pct_start=0.1,
-                                div_factor=1e3,
-                                max_lr=1e-2,
-                                epochs=cfg.trainparam.epochs,
-                                steps_per_epoch=len(train_loader))
-            else:
-                raise ValueError(f'Invalid scheduler: {cfg.train.scheduler}')
+            scheduler = get_scheduler(
+                            scheduler_name=cfg.train.scheduler.name,
+                            param=cfg.train.scheduler.param,
+                            steps_per_epoch=len(train_loader),
+                            optimizer=optimizer)
 
-            if cfg.train.loss_function == 'SmoothBCEwLogits':
-                loss_fn = SmoothBCEwLogits(smoothing=0.005)
-            elif cfg.train.loss_function == 'BCEWithLogitsLoss':
-                loss_fn = BCEWithLogitsLoss()
+            loss_fn = get_loss_function(
+                        loss_function_name=cfg.train.loss_function.name,
+                        param=cfg.train.loss_function.param)
 
             es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
             for epoch in range(cfg.train.param.epochs):
