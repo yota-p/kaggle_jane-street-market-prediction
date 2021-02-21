@@ -26,6 +26,7 @@ from src.util.get_environment import get_datadir, get_exec_env, get_device
 from src.util.fast_fillna import fast_fillna
 from src.util.calc_utility_score import utility_score_bincount
 from src.util.calc_cross_feature import calc_cross_feature
+from src.features.basetransformer import BaseTransformer
 
 
 def create_janeapi() -> Tuple[Any, Any]:
@@ -120,6 +121,30 @@ class SmoothBCEwLogits(_WeightedLoss):
             loss = loss.mean()
 
         return loss
+
+
+class NaFiller(BaseTransformer):
+    def __init__(self, method):
+        self.method_ = method
+        self.mean_: pd.DataFrame = None
+
+    def fit(self, X):
+        if self.method_ == 'mean':
+            self.mean_ = X.mean()
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if self.method_ == '-999':
+            X.fillna(-999, inplace=True)
+        elif self.method_ == 'mean':
+            X.fillna(self.mean_, inplace=True)
+        elif self.method_ == 'forward':
+            X.fillna(method='ffill').fillna(0, inplace=True)
+        elif self.method is None:
+            pass
+        else:
+            raise ValueError(f'Invalid method: {self.method}')
+        return X
 
 
 class MarketDataset(Dataset):
@@ -273,22 +298,26 @@ def main(cfg: DictConfig) -> None:
     df['action_3'] = (df['resp_3'] > 0).astype('int')
     df['action_4'] = (df['resp_4'] > 0).astype('int')
 
-    f_mean_df = df[feat_cols].mean()
-    f_mean = f_mean_df.values
-    np.save(f'{OUT_DIR}/f_mean.npy', f_mean)
-
     # Fill missing values
-    if cfg.feature_engineering.method_fillna == '-999':
-        df.fillna(-999, inplace=True)
-    elif cfg.feature_engineering.method_fillna == 'mean':
-        df.fillna(f_mean_df, inplace=True)
-    elif cfg.feature_engineering.method_fillna == 'forward':
-        df.fillna(method='ffill').fillna(0, inplace=True)
-    elif cfg.feature_engineering.method_fillna is None:
-        pass
-    else:
-        raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
+    nfl = NaFiller(cfg.feature_engineering.method_fillna)
+    df[feat_cols] = nfl.fit_transform(df[feat_cols])
+    if nfl.mean_ is not None:
+        f_mean = nfl.mean_.values
+        np.save(f'{OUT_DIR}/nfl_mean.npy', f_mean)
+    # f_mean_df = df[feat_cols].mean()
+    # f_mean = f_mean_df.values
 
+    '''    if cfg.feature_engineering.method_fillna == '-999':
+            df.fillna(-999, inplace=True)
+        elif cfg.feature_engineering.method_fillna == 'mean':
+            df.fillna(f_mean_df, inplace=True)
+        elif cfg.feature_engineering.method_fillna == 'forward':
+            df.fillna(method='ffill').fillna(0, inplace=True)
+        elif cfg.feature_engineering.method_fillna is None:
+            pass
+        else:
+            raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
+    '''
     if cfg.feature_engineering.cross:
         df['cross_41_42_43'] = df['feature_41'] + df['feature_42'] + df['feature_43']
         df['cross_1_2'] = df['feature_1'] / (df['feature_2'] + 1e-5)
