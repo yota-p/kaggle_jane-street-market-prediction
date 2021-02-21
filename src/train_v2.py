@@ -288,7 +288,7 @@ def train_cv(
         model_param: DictConfig,
         train_param: DictConfig,
         cv: DictConfig,
-        OUT_DIR: str,
+        model_save_path: str,
         cfg
         ) -> None:
 
@@ -300,81 +300,92 @@ def train_cv(
         train = df.loc[df.date < 450].reset_index(drop=True)
         valid = df.loc[(df.date >= 450) & (df.date < 500)].reset_index(drop=True)
 
-    NMODELS = cfg.train.param.n_models
     train_set = MarketDataset(train, features, target_cols)
     train_loader = DataLoader(train_set, batch_size=cfg.train.param.batch_size, shuffle=True, num_workers=4)
     valid_set = MarketDataset(valid, features, target_cols)
     valid_loader = DataLoader(valid_set, batch_size=cfg.train.param.batch_size, shuffle=False, num_workers=4)
 
     start_time = time.time()
-    for i in range(NMODELS):
-        print(f'Model{i}:')
-        seed_everything(seed=42+i)
+    torch.cuda.empty_cache()
+    device = get_device()
+    model = get_model(
+                model_name=cfg.model.name,
+                param=cfg.model.param,
+                feat_cols=features,
+                target_cols=target_cols,
+                device=device)
 
-        torch.cuda.empty_cache()
-        device = get_device()
-        model = get_model(
-                    model_name=cfg.model.name,
-                    param=cfg.model.param,
-                    feat_cols=features,
-                    target_cols=target_cols,
-                    device=device)
+    optimizer = get_optimizer(
+                    optimizer_name=cfg.train.optimizer.name,
+                    param=cfg.train.optimizer.param,
+                    model_param=model.parameters())
 
-        optimizer = get_optimizer(
-                        optimizer_name=cfg.train.optimizer.name,
-                        param=cfg.train.optimizer.param,
-                        model_param=model.parameters())
+    scheduler = get_scheduler(
+                    scheduler_name=cfg.train.scheduler.name,
+                    param=cfg.train.scheduler.param,
+                    steps_per_epoch=len(train_loader),
+                    optimizer=optimizer)
 
-        scheduler = get_scheduler(
-                        scheduler_name=cfg.train.scheduler.name,
-                        param=cfg.train.scheduler.param,
-                        steps_per_epoch=len(train_loader),
-                        optimizer=optimizer)
+    loss_fn = get_loss_function(
+                loss_function_name=cfg.train.loss_function.name,
+                param=cfg.train.loss_function.param)
 
-        loss_fn = get_loss_function(
-                    loss_function_name=cfg.train.loss_function.name,
-                    param=cfg.train.loss_function.param)
+    es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
 
-        es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
-        for epoch in range(cfg.train.param.epochs):
-            train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
+    for epoch in range(cfg.train.param.epochs):
+        train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
 
-            valid_pred = inference_fn(model, valid_loader, device, target_cols)
-            valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
-            # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
-            valid_pred = np.median(valid_pred, axis=1)
-            valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-            valid_u_score = utility_score_bincount(
-                                date=valid.date.values, weight=valid.weight.values,
-                                resp=valid.resp.values, action=valid_pred)
-            print(f'Model{i} EPOCH:{epoch:3} \
-                train_loss={train_loss:.5f} \
-                valid_u_score={valid_u_score:.5f} \
-                valid_auc={valid_auc:.5f} \
-                time: {(time.time() - start_time) / 60:.2f} min')
-            model_weights = f'{OUT_DIR}/model{i}.pth'
-            es(valid_auc, model, model_path=model_weights)
-            if es.early_stop:
-                print('Early stopping')
-                break
-        # torch.save(model.state_dict(), model_weights)
+        valid_pred = inference_fn(model, valid_loader, device, target_cols)
+        valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
+        # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
+        valid_pred = np.median(valid_pred, axis=1)
+        valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
+        valid_u_score = utility_score_bincount(
+                            date=valid.date.values, weight=valid.weight.values,
+                            resp=valid.resp.values, action=valid_pred)
+        score = {
+            'epoch': epoch,
+            'train_loss': train_loss,
+            'valid_u_score': valid_u_score,
+            'valid_auc': valid_auc,
+            'time': (time.time() - start_time) / 60}
+        pprint.pprint(score)
+        es(valid_auc, model, model_path=model_save_path)
+        if es.early_stop:
+            print('Early stopping')
+            break
+    # torch.save(model.state_dict(), model_weights)
 
-    # Validate
+    return None
+
+
+def validate_ensemble(df, all_feat_cols, target_cols, model_paths, cfg):
+    if cfg.cv.name == 'nocv':
+        # print('Training on full data. Note that validation data overlaps train, which will overfit!')
+        # train = df
+        valid = df.loc[(df.date >= 450) & (df.date < 500)].reset_index(drop=True)
+    else:
+        # train = df.loc[df.date < 450].reset_index(drop=True)
+        valid = df.loc[(df.date >= 450) & (df.date < 500)].reset_index(drop=True)
+
+    # train_set = MarketDataset(train, all_feat_cols, target_cols)
+    # train_loader = DataLoader(train_set, batch_size=cfg.train.param.batch_size, shuffle=True, num_workers=4)
+    valid_set = MarketDataset(valid, all_feat_cols, target_cols)
+    valid_loader = DataLoader(valid_set, batch_size=cfg.train.param.batch_size, shuffle=False, num_workers=4)
+
     valid_pred = np.zeros((len(valid), len(target_cols)))
-    for i in range(NMODELS):
+    for model_path in model_paths:
         torch.cuda.empty_cache()
         device = get_device()
         model = get_model(
                     model_name=cfg.model.name,
                     param=cfg.model.param,
-                    feat_cols=features,
+                    feat_cols=all_feat_cols,
                     target_cols=target_cols,
                     device=device)
+        model.load_state_dict(torch.load(model_path))
+        valid_pred += inference_fn(model, valid_loader, device, target_cols) / len(model_paths)
 
-        model_weights = f'{OUT_DIR}/model{i}.pth'
-        model.load_state_dict(torch.load(model_weights))
-
-        valid_pred += inference_fn(model, valid_loader, device, target_cols) / NMODELS
     auc_score = roc_auc_score(valid[target_cols].values, valid_pred)
     logloss_score = log_loss(valid[target_cols].values, valid_pred)
 
@@ -383,9 +394,7 @@ def train_cv(
     valid_score = utility_score_bincount(
                     date=valid.date.values, weight=valid.weight.values,
                     resp=valid.resp.values, action=valid_pred)
-    print(f'{NMODELS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
-
-    return None
+    print(f'{len(model_paths)} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
 
 
 @hydra.main(config_path='../config/train_v2', config_name='config')
@@ -394,6 +403,7 @@ def main(cfg: DictConfig) -> None:
     DATA_DIR = get_datadir()
     OUT_DIR = f'{DATA_DIR}/{cfg.out_dir}'
     Path(OUT_DIR).mkdir(exist_ok=True, parents=True)
+    model_weights = [f'{OUT_DIR}/model{i}.pth' for i in range(cfg.train.param.n_models)]
 
     seed_everything(seed=42)
     feat_cols = [f'feature_{i}' for i in range(130)]
@@ -406,9 +416,6 @@ def main(cfg: DictConfig) -> None:
     # his example: https://www.kaggle.com/gracewan/plot-model
     print('Start feature engineering')
     # load data
-    # df = pd.read_csv(f'{DATA_DIR}/raw/train.csv')
-    # df.to_pickle(f'{OUT_DIR}/rawdf.pkl')
-    # df = pd.read_pickle(f'{OUT_DIR}/rawdf.pkl')
     df = pd.read_pickle(f'{DATA_DIR}/processed/basic_v1/train.pkl')
     df = df[feat_cols+['date', 'weight', 'resp_1', 'resp_2', 'resp_3', 'resp_4', 'resp', 'ts_id']]
     print(f'Input df.shape: {df.shape}')
@@ -442,14 +449,20 @@ def main(cfg: DictConfig) -> None:
 
     # Train
     if cfg.option.train:
-        train_cv(df, all_feat_cols, target_cols, cfg.model.name, cfg.model.param, cfg.train.param, cfg.cv, OUT_DIR, cfg)
+        for i, model_weight in enumerate(model_weights):
+            print(f'Model{i}:')
+            seed_everything(seed=42+i)
+            train_cv(df, all_feat_cols, target_cols, cfg.model.name, cfg.model.param, cfg.train.param, cfg.cv, model_weight, cfg)
+
+        # Validate with model ensemble
+        validate_ensemble(df, all_feat_cols, target_cols, model_weights, cfg)
 
     # Predict
     if cfg.option.predict:
-        device = get_device()
         model_list = []
-        for i in range(cfg.train.param.n_models):
+        for model_weight in model_weights:
             torch.cuda.empty_cache()
+            device = get_device()
             model = get_model(
                         model_name=cfg.model.name,
                         param=cfg.model.param,
@@ -457,8 +470,7 @@ def main(cfg: DictConfig) -> None:
                         target_cols=target_cols,
                         device=device)
 
-            model_weights = f"{OUT_DIR}/model{i}.pth"
-            model.load_state_dict(torch.load(model_weights))
+            model.load_state_dict(torch.load(model_weight))
             model.eval()
             model_list.append(model)
 

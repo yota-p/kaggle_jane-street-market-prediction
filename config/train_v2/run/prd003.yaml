@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: prd  # dev, test, prd
 
-out_dir: train_v2/prd001
+out_dir: train_v2/prd002
 
 option:
   train: true
@@ -33,7 +33,7 @@ train:
   optimizer:
     name: 'Adam'
     param:
-      lr: 0.001
+      lr: 0.005
       weight_decay: 0.00001
   scheduler:
     name: null
@@ -53,7 +53,7 @@ train:
     batch_size: 8192  # * gpu_num
     epochs: 50
     early_stopping_rounds: 3
-    n_models: 3
+    n_models: 10
 
 target:
   path: processed/basic_v1/train.pkl
