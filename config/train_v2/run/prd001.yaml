@@ -2,9 +2,9 @@ mlflow:
   experiment:
     name: train_v2
     tags: 
-      exec: dev  # dev, test, prd
+      exec: prd  # dev, test, prd
 
-out_dir: train_v2/dev001
+out_dir: train_v2/prd001
 
 option:
   train: true

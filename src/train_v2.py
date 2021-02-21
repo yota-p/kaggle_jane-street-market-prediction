@@ -21,7 +21,7 @@ from torch.nn import BCEWithLogitsLoss
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.nn.modules.loss import _WeightedLoss
 import torch.nn.functional as F
-from src.util.get_environment import get_datadir, get_exec_env, get_device()
+from src.util.get_environment import get_datadir, get_exec_env, get_device
 from src.util.fast_fillna import fast_fillna
 from src.util.calc_utility_score import utility_score_bincount
 
@@ -315,14 +315,15 @@ def main(cfg: DictConfig) -> None:
     feat_cols = [f'feature_{i}' for i in range(130)]
     target_cols = ['action', 'action_1', 'action_2', 'action_3', 'action_4']
 
+    # Feature engineering
     # load data
     train = pd.read_csv(f'{DATA_DIR}/raw/train.csv')
 
     # eliminate data size for debug
     if cfg.mlflow.experiment.tags.exec == 'dev':
+        print('Developing execution. Extracting records for mod(date, 10)==0')
         train = train[np.mod(train['date'], 10) == 0]
 
-    # Feature engineering
     # https://www.kaggle.com/lucasmorin/running-algos-fe-for-fast-inference/data
     # eda: https://www.kaggle.com/carlmcbrideellis/jane-street-eda-of-day-0-and-feature-importance
     # his example: https://www.kaggle.com/gracewan/plot-model
@@ -371,90 +372,91 @@ def main(cfg: DictConfig) -> None:
     valid_set = MarketDataset(valid, all_feat_cols, target_cols)
     valid_loader = DataLoader(valid_set, batch_size=cfg.train.param.batch_size, shuffle=False, num_workers=4)
 
-    start_time = time.time()
-    for i in range(NMODELS):
-        print(f'Fold{i}:')
-        seed_everything(seed=42+i)
-        torch.cuda.empty_cache()
-        device = get_device()
-        if cfg.model.name == 'torch_v1':
-            model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
-        else:
-            raise ValueError(f'Invalid model: {cfg.model.name}')
-        model.to(device)
-        # model = nn.DataParallel(model)
+    if cfg.option.train:
+        start_time = time.time()
+        for i in range(NMODELS):
+            print(f'Fold{i}:')
+            seed_everything(seed=42+i)
+            torch.cuda.empty_cache()
+            device = get_device()
+            if cfg.model.name == 'torch_v1':
+                model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
+            else:
+                raise ValueError(f'Invalid model: {cfg.model.name}')
+            model.to(device)
+            # model = nn.DataParallel(model)
 
-        if cfg.train.optimizer == 'torch.optim.Adam':
-            optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.param.lr, weight_decay=cfg.train.param.weight_decay)
-            # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-            # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
-        else:
-            raise ValueError(f'Invalid optimizer: {cfg.train.optimizer}')
+            if cfg.train.optimizer == 'torch.optim.Adam':
+                optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.param.lr, weight_decay=cfg.train.param.weight_decay)
+                # optimizer = Nadam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+                # optimizer = Lookahead(optimizer=optimizer, k=10, alpha=0.5)
+            else:
+                raise ValueError(f'Invalid optimizer: {cfg.train.optimizer}')
 
-        if cfg.train.scheduler is None:
-            scheduler = None
-        elif cfg.train.scheduler == 'torch.optim.lr_scheduler.OneCycleLR':
-            scheduler = OneCycleLR(
-                            optimizer=optimizer,
-                            pct_start=0.1,
-                            div_factor=1e3,
-                            max_lr=1e-2,
-                            epochs=cfg.trainparam.epochs,
-                            steps_per_epoch=len(train_loader))
-        else:
-            raise ValueError(f'Invalid scheduler: {cfg.train.scheduler}')
+            if cfg.train.scheduler is None:
+                scheduler = None
+            elif cfg.train.scheduler == 'torch.optim.lr_scheduler.OneCycleLR':
+                scheduler = OneCycleLR(
+                                optimizer=optimizer,
+                                pct_start=0.1,
+                                div_factor=1e3,
+                                max_lr=1e-2,
+                                epochs=cfg.trainparam.epochs,
+                                steps_per_epoch=len(train_loader))
+            else:
+                raise ValueError(f'Invalid scheduler: {cfg.train.scheduler}')
 
-        if cfg.train.loss_function == 'SmoothBCEwLogits':
-            loss_fn = SmoothBCEwLogits(smoothing=0.005)
-        elif cfg.train.loss_function == 'BCEWithLogitsLoss':
-            loss_fn = BCEWithLogitsLoss()
+            if cfg.train.loss_function == 'SmoothBCEwLogits':
+                loss_fn = SmoothBCEwLogits(smoothing=0.005)
+            elif cfg.train.loss_function == 'BCEWithLogitsLoss':
+                loss_fn = BCEWithLogitsLoss()
 
-        es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
-        for epoch in range(cfg.train.param.epochs):
-            train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
+            es = EarlyStopping(patience=cfg.train.param.early_stopping_rounds, mode='max')
+            for epoch in range(cfg.train.param.epochs):
+                train_loss = train_fn(model, optimizer, scheduler, loss_fn, train_loader, device)
 
-            valid_pred = inference_fn(model, valid_loader, device, target_cols)
-            valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
-            # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
-            valid_pred = np.median(valid_pred, axis=1)
-            valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-            valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
-                                                   resp=valid.resp.values, action=valid_pred)
-            print(f'Model{i} EPOCH:{epoch:3} \
-                   train_loss={train_loss:.5f} \
-                   valid_u_score={valid_u_score:.5f} \
-                   valid_auc={valid_auc:.5f} \
-                   time: {(time.time() - start_time) / 60:.2f} min')
+                valid_pred = inference_fn(model, valid_loader, device, target_cols)
+                valid_auc = roc_auc_score(valid[target_cols].values, valid_pred)
+                # valid_logloss = log_loss(valid[target_cols].values, valid_pred)
+                valid_pred = np.median(valid_pred, axis=1)
+                valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
+                valid_u_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
+                                                       resp=valid.resp.values, action=valid_pred)
+                print(f'Model{i} EPOCH:{epoch:3} \
+                    train_loss={train_loss:.5f} \
+                    valid_u_score={valid_u_score:.5f} \
+                    valid_auc={valid_auc:.5f} \
+                    time: {(time.time() - start_time) / 60:.2f} min')
+                model_weights = f'{OUT_DIR}/online_model{i}.pth'
+                es(valid_auc, model, model_path=model_weights)
+                if es.early_stop:
+                    print('Early stopping')
+                    break
+            # torch.save(model.state_dict(), model_weights)
+
+        # Validate
+        valid_pred = np.zeros((len(valid), len(target_cols)))
+        for i in range(NMODELS):
+            torch.cuda.empty_cache()
+            device = get_device()
+            if cfg.model.name == 'torch_v1':
+                model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
+            else:
+                raise ValueError(f'Invalid model: {cfg.model.name}')
+
+            model.to(device)
             model_weights = f'{OUT_DIR}/online_model{i}.pth'
-            es(valid_auc, model, model_path=model_weights)
-            if es.early_stop:
-                print('Early stopping')
-                break
-        # torch.save(model.state_dict(), model_weights)
+            model.load_state_dict(torch.load(model_weights))
 
-    # Validate
-    valid_pred = np.zeros((len(valid), len(target_cols)))
-    for i in range(NMODELS):
-        torch.cuda.empty_cache()
-        device = get_device()
-        if cfg.model.name == 'torch_v1':
-            model = Model(all_feat_cols, target_cols, cfg.model.param.dropout_rate, cfg.model.param.hidden_size)
-        else:
-            raise ValueError(f'Invalid model: {cfg.model.name}')
+            valid_pred += inference_fn(model, valid_loader, device, target_cols) / NMODELS
+        auc_score = roc_auc_score(valid[target_cols].values, valid_pred)
+        logloss_score = log_loss(valid[target_cols].values, valid_pred)
 
-        model.to(device)
-        model_weights = f'{OUT_DIR}/online_model{i}.pth'
-        model.load_state_dict(torch.load(model_weights))
-
-        valid_pred += inference_fn(model, valid_loader, device, target_cols) / NMODELS
-    auc_score = roc_auc_score(valid[target_cols].values, valid_pred)
-    logloss_score = log_loss(valid[target_cols].values, valid_pred)
-
-    valid_pred = np.median(valid_pred, axis=1)
-    valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
-    valid_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
-                                         resp=valid.resp.values, action=valid_pred)
-    print(f'{NMODELS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
+        valid_pred = np.median(valid_pred, axis=1)
+        valid_pred = np.where(valid_pred >= 0.5, 1, 0).astype(int)
+        valid_score = utility_score_bincount(date=valid.date.values, weight=valid.weight.values,
+                                             resp=valid.resp.values, action=valid_pred)
+        print(f'{NMODELS} models valid score: {valid_score}\tauc_score: {auc_score:.4f}\tlogloss_score:{logloss_score:.4f}')
 
     # Predict
     if cfg.option.predict:
@@ -469,7 +471,7 @@ def main(cfg: DictConfig) -> None:
             model.eval()
             model_list.append(model)
 
-        predict(model_list, cfg.feature_engineering, cfg.target.col, OUT_DIR, device, f_mean)
+        predict(model_list, cfg.feature_engineering, target_cols, OUT_DIR, device, f_mean)
 
     return None
 
