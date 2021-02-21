@@ -13,7 +13,10 @@ option:
 feature_engineering:
   weight_cutoff: null
   method_fillna: 'mean'  # -999, mean, forward
-  cross: True
+  cross: 
+    cols:
+      - cross_41_42_43
+      - cross_1_2
 
 cv:
   name: nocv

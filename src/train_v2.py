@@ -124,13 +124,14 @@ class SmoothBCEwLogits(_WeightedLoss):
 
 
 class NaFiller(BaseTransformer):
-    def __init__(self, method):
+    def __init__(self, method: str, target_cols: List[str]) -> None:
         self.method_ = method
+        self.target_cols = target_cols
         self.mean_: pd.DataFrame = None
 
     def fit(self, X):
         if self.method_ == 'mean':
-            self.mean_ = X.mean()
+            self.mean_ = X[self.target_cols].mean()
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -144,6 +145,25 @@ class NaFiller(BaseTransformer):
             pass
         else:
             raise ValueError(f'Invalid method: {self.method}')
+        return X
+
+
+class CrossFeatureCalculator(BaseTransformer):
+    def __init__(self, generate_cols: List[str]):
+        self.generate_cols = generate_cols
+        menu = ['cross_41_42_43', 'cross_1_2']
+        if generate_cols is not None:
+            abnormal = []
+            for c in generate_cols:
+                if c not in menu:
+                    abnormal.append(c)
+            if len(abnormal) > 0:
+                raise ValueError(f'Invalid cols: {abnormal}')
+
+    def transform(self, X):
+        if self.generate_cols is not None:
+            X['cross_41_42_43'] = X['feature_41'] + X['feature_42'] + X['feature_43']
+            X['cross_1_2'] = X['feature_1'] / (X['feature_2'] + 1e-5)
         return X
 
 
@@ -299,29 +319,16 @@ def main(cfg: DictConfig) -> None:
     df['action_4'] = (df['resp_4'] > 0).astype('int')
 
     # Fill missing values
-    nfl = NaFiller(cfg.feature_engineering.method_fillna)
-    df[feat_cols] = nfl.fit_transform(df[feat_cols])
+    nfl = NaFiller(cfg.feature_engineering.method_fillna, feat_cols)
+    df = nfl.fit_transform(df)
     if nfl.mean_ is not None:
         f_mean = nfl.mean_.values
         np.save(f'{OUT_DIR}/nfl_mean.npy', f_mean)
-    # f_mean_df = df[feat_cols].mean()
-    # f_mean = f_mean_df.values
 
-    '''    if cfg.feature_engineering.method_fillna == '-999':
-            df.fillna(-999, inplace=True)
-        elif cfg.feature_engineering.method_fillna == 'mean':
-            df.fillna(f_mean_df, inplace=True)
-        elif cfg.feature_engineering.method_fillna == 'forward':
-            df.fillna(method='ffill').fillna(0, inplace=True)
-        elif cfg.feature_engineering.method_fillna is None:
-            pass
-        else:
-            raise ValueError(f'Invalid method_fillna: {cfg.feature_engineering.method_fillna}')
-    '''
-    if cfg.feature_engineering.cross:
-        df['cross_41_42_43'] = df['feature_41'] + df['feature_42'] + df['feature_43']
-        df['cross_1_2'] = df['feature_1'] / (df['feature_2'] + 1e-5)
-        all_feat_cols.extend(['cross_41_42_43', 'cross_1_2'])
+    crs = CrossFeatureCalculator(cfg.feature_engineering.cross.cols)
+    df = crs.fit_transform(df)
+    if cfg.feature_engineering.cross.cols is not None:
+        all_feat_cols.extend(cfg.feature_engineering.cross.cols)
 
     if cfg.cv.name == 'nocv':
         print('Training on full data. Note that validation data overlaps train, which will overfit!')
