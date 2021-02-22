@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: prd  # dev, test, prd
 
-out_dir: train_v2/prd003
+out_dir: train_v2/prd004  # branched from prd001. method_fillna: mean->forward, n_models: 3->5
 
 option:
   train: true
@@ -12,7 +12,7 @@ option:
 
 feature_engineering:
   weight_cutoff: null
-  method_fillna: 'mean'  # -999, mean, forward
+  method_fillna: 'forward'  # -999, mean, forward
   cross: 
     cols:
       - cross_41_42_43
@@ -33,7 +33,7 @@ train:
   optimizer:
     name: 'Adam'
     param:
-      lr: 0.005
+      lr: 0.001
       weight_decay: 0.00001
   scheduler:
     name: null
@@ -53,7 +53,7 @@ train:
     batch_size: 8192  # * gpu_num
     epochs: 50
     early_stopping_rounds: 3
-    n_models: 10
+    n_models: 5
 
 target:
   path: processed/basic_v1/train.pkl
