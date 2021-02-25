@@ -12,7 +12,7 @@ option:
 
 feature_engineering:
   weight_cutoff: null
-  method_fillna: 'forward'  # -999, mean, forward
+  method_fillna: 'mean'  # -999, mean, forward
   cross: 
     cols:
       - cross_41_42_43

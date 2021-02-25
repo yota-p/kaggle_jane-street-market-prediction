@@ -4,7 +4,7 @@ mlflow:
     tags: 
       exec: prd  # dev, test, prd
 
-out_dir: train_v2/prd004  # branched from prd001. method_fillna: mean->forward, n_models: 3->5
+out_dir: train_v2/prd004  # branched from prd001. n_models: 3->5
 
 option:
   train: true
@@ -12,7 +12,7 @@ option:
 
 feature_engineering:
   weight_cutoff: null
-  method_fillna: 'forward'  # -999, mean, forward
+  method_fillna: 'mean'  # -999, mean, forward
   cross: 
     cols:
       - cross_41_42_43
