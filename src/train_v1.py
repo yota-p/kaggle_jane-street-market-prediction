@@ -19,6 +19,7 @@ from src.util.get_environment import get_exec_env, get_datadir, is_gpu, is_ipyke
 from src.util.fast_fillna import fast_fillna
 from src.models.PurgedGroupTimeSeriesSplit import PurgedGroupTimeSeriesSplit
 from src.util.calc_utility_score import utility_score_pd_scaled
+from src.util.calc_cross_feature import calc_cross_feature
 warnings.filterwarnings("ignore")
 
 
@@ -30,22 +31,6 @@ def create_janeapi() -> Tuple[Any, Any]:
     env = janestreet.make_env()  # initialize the environment
     iter_test = env.iter_test()  # an iterator which loops over the test set
     return env, iter_test
-
-
-def calc_cross_feature(x_tt: np.ndarray) -> np.ndarray:
-    '''
-    Function to caclulate cross feature.
-    Input: x_tt: (1,N) ndarray. Column order should follow the dataframe created by janestreet api
-    Output: y_tt: (1, N+k) ndarray. Right k rows contain calculated cross features.
-    '''
-    cross_41_42_43 = x_tt[:, 41] + x_tt[:, 42] + x_tt[:, 43]
-    cross_1_2 = x_tt[:, 1] / (x_tt[:, 2] + 1e-5)
-    y_tt = np.concatenate((
-        x_tt,
-        np.array(cross_41_42_43).reshape(x_tt.shape[0], 1),
-        np.array(cross_1_2).reshape(x_tt.shape[0], 1),
-    ), axis=1)
-    return y_tt
 
 
 def predict(models: List[Any], feature_engineering: DictConfig, target: str, OUT_DIR: str) -> None:
@@ -253,7 +238,7 @@ def main(cfg: DictConfig) -> None:
         elif cfg.cv.name == 'PurgedGroupTimeSeriesSplit':
             train_cv(train, features, cfg.target.col, cfg.model.name, cfg.model.model_param, cfg.model.train_param, cfg.cv.param, OUT_DIR)
         else:
-            raise ValueError(f'Invalid cv: {cfg.cv}')
+            raise ValueError(f'Invalid cv: {cfg.cv.name}')
 
     # Predict
     if cfg.option.predict:

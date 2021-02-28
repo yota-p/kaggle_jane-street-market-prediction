@@ -20,6 +20,10 @@ def is_gpu() -> bool:
     return torch.cuda.is_available()
 
 
+def get_device() -> torch.device:
+    return torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 def is_ipykernel() -> bool:
     if 'ipykernel' in sys.modules:
         # Kaggle Notebook interactive, Kaggle Notebook Batch, Kaggle script Interactive, Jupyter notebook
