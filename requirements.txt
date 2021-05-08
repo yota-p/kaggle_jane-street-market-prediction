@@ -5,7 +5,7 @@ six==1.14.0
 click==7.1.1
 toml==0.10.0
 greenlet==0.4.15
-eventlet==0.29.1
+eventlet==0.31.0
 ipython==7.19.0
 ox_profile==0.2.6
 PyContracts==1.8.12
