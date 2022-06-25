@@ -15,6 +15,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      
+      - name: install llvm as dependency for numba
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 15
+          export LLVM_CONFIG=/usr/bin/llvm-config-15
 
       - name: Install Python 3
         uses: actions/setup-python@v1
